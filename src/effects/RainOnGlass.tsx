@@ -15,7 +15,7 @@ export function RainOnGlass({ phase }: RainOnGlassProps) {
   const previousPhase = useRef<GamePhase>(phase)
   const { size } = useThree()
   const targetGame = phase === 'launch' ? 0 : 1
-  const targetOpacity = phase === 'launch' ? 1 : 0.56
+  const targetOpacity = phase === 'launch' ? 0.76 : 0.42
   const backdrop = useMemo(() => createShelterBackdropTexture(), [])
   const uniforms = useMemo(
     () => ({
@@ -23,7 +23,7 @@ export function RainOnGlass({ phase }: RainOnGlassProps) {
       iResolution: { value: new Vector2(1, 1) },
       iMouse: { value: new Vector3(0, 0, 0) },
       uGame: { value: 0 },
-      uOpacity: { value: 1 },
+      uOpacity: { value: 0.76 },
       iChannel0: { value: backdrop },
     }),
     [backdrop],

@@ -2,6 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
 import type { Group } from 'three'
 import { MathUtils } from 'three'
+import { GAME_SHELTER } from '../config/shelter'
 import type { GameStats } from '../types/game'
 
 type HazardKind = 'box' | 'octahedron' | 'tetrahedron'
@@ -24,15 +25,73 @@ type HazardsProps = {
   onStatsChange: (stats: GameStats) => void
 }
 
-const SHELTER_CENTER = { x: 0, y: -1.42 }
-const SHELTER_COLLISION_RADIUS = 0.43
-const SPAWN_SHELTER_CLEARANCE = 1.45
+const SHELTER_CENTER = { x: GAME_SHELTER.position.x, y: GAME_SHELTER.position.y + 0.7 * GAME_SHELTER.scale }
 const MAX_SPEED = 1.8
 const REPEL_RADIUS = 0.78
 const REPEL_FORCE = 4.4
 
+type Point = {
+  x: number
+  y: number
+}
+
 function randomBetween(min: number, max: number) {
   return MathUtils.lerp(min, max, Math.random())
+}
+
+function toWorldPoint(point: readonly [number, number]): Point {
+  return {
+    x: GAME_SHELTER.position.x + point[0] * GAME_SHELTER.scale,
+    y: GAME_SHELTER.position.y + point[1] * GAME_SHELTER.scale,
+  }
+}
+
+function distanceToSegment(point: Point, start: Point, end: Point) {
+  const segmentX = end.x - start.x
+  const segmentY = end.y - start.y
+  const lengthSquared = segmentX * segmentX + segmentY * segmentY
+
+  if (lengthSquared === 0) return Math.hypot(point.x - start.x, point.y - start.y)
+
+  const t = MathUtils.clamp(((point.x - start.x) * segmentX + (point.y - start.y) * segmentY) / lengthSquared, 0, 1)
+  const closestX = start.x + segmentX * t
+  const closestY = start.y + segmentY * t
+  return Math.hypot(point.x - closestX, point.y - closestY)
+}
+
+function pointInTriangle(point: Point, a: Point, b: Point, c: Point) {
+  const d1 = (point.x - b.x) * (a.y - b.y) - (a.x - b.x) * (point.y - b.y)
+  const d2 = (point.x - c.x) * (b.y - c.y) - (b.x - c.x) * (point.y - c.y)
+  const d3 = (point.x - a.x) * (c.y - a.y) - (c.x - a.x) * (point.y - a.y)
+  const hasNegative = d1 < 0 || d2 < 0 || d3 < 0
+  const hasPositive = d1 > 0 || d2 > 0 || d3 > 0
+  return !(hasNegative && hasPositive)
+}
+
+function circleTouchesShelter(point: Point, radius: number) {
+  const padding = radius * GAME_SHELTER.hazardCollisionScale + GAME_SHELTER.collisionPadding
+  const bodyHalfWidth = (GAME_SHELTER.body.width * GAME_SHELTER.scale) / 2
+  const bodyHalfHeight = (GAME_SHELTER.body.height * GAME_SHELTER.scale) / 2
+  const bodyCenter = {
+    x: GAME_SHELTER.position.x,
+    y: GAME_SHELTER.position.y + GAME_SHELTER.body.centerY * GAME_SHELTER.scale,
+  }
+
+  const closestBodyX = MathUtils.clamp(point.x, bodyCenter.x - bodyHalfWidth, bodyCenter.x + bodyHalfWidth)
+  const closestBodyY = MathUtils.clamp(point.y, bodyCenter.y - bodyHalfHeight, bodyCenter.y + bodyHalfHeight)
+  if (Math.hypot(point.x - closestBodyX, point.y - closestBodyY) <= padding) return true
+
+  const roofLeft = toWorldPoint(GAME_SHELTER.roof.left)
+  const roofRight = toWorldPoint(GAME_SHELTER.roof.right)
+  const roofPeak = toWorldPoint(GAME_SHELTER.roof.peak)
+
+  if (pointInTriangle(point, roofLeft, roofRight, roofPeak)) return true
+
+  return (
+    distanceToSegment(point, roofLeft, roofRight) <= padding ||
+    distanceToSegment(point, roofRight, roofPeak) <= padding ||
+    distanceToSegment(point, roofPeak, roofLeft) <= padding
+  )
 }
 
 function createHazard(id: number, bounds: { x: number; y: number }): Hazard {
@@ -46,10 +105,10 @@ function createHazard(id: number, bounds: { x: number; y: number }): Hazard {
     y = side < 2 ? (side === 0 ? bounds.y : -bounds.y * 0.45) : randomBetween(-bounds.y * 0.1, bounds.y)
 
     const shelterDistance = Math.hypot(x - SHELTER_CENTER.x, y - SHELTER_CENTER.y)
-    if (shelterDistance > SPAWN_SHELTER_CLEARANCE + radius) break
+    if (shelterDistance > GAME_SHELTER.spawnClearance + radius) break
   }
 
-  if (Math.hypot(x - SHELTER_CENTER.x, y - SHELTER_CENTER.y) <= SPAWN_SHELTER_CLEARANCE + radius) {
+  if (Math.hypot(x - SHELTER_CENTER.x, y - SHELTER_CENTER.y) <= GAME_SHELTER.spawnClearance + radius) {
     x = x < 0 ? -bounds.x * 0.86 : bounds.x * 0.86
     y = Math.max(y, -bounds.y * 0.05)
   }
@@ -163,8 +222,7 @@ export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
         hazard.vy *= -1
       }
 
-      const shelterDistance = Math.hypot(hazard.x - SHELTER_CENTER.x, hazard.y - SHELTER_CENTER.y)
-      if (shelterDistance < SHELTER_COLLISION_RADIUS + hazard.radius) {
+      if (circleTouchesShelter(hazard, hazard.radius)) {
         hasLost.current = true
         onLose()
         return

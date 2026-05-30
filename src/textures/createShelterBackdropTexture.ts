@@ -21,9 +21,9 @@ export function createShelterBackdropTexture() {
   ctx.fillStyle = sky
   ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-  const glow = ctx.createRadialGradient(510, 540, 0, 510, 540, 340)
-  glow.addColorStop(0, 'rgba(220, 142, 67, 0.52)')
-  glow.addColorStop(0.32, 'rgba(156, 88, 45, 0.24)')
+  const glow = ctx.createRadialGradient(510, 590, 0, 510, 590, 360)
+  glow.addColorStop(0, 'rgba(220, 142, 67, 0.22)')
+  glow.addColorStop(0.32, 'rgba(156, 88, 45, 0.13)')
   glow.addColorStop(1, 'rgba(156, 88, 45, 0)')
   ctx.fillStyle = glow
   ctx.fillRect(0, 0, canvas.width, canvas.height)
@@ -37,25 +37,6 @@ export function createShelterBackdropTexture() {
   ctx.lineTo(0, 1024)
   ctx.closePath()
   ctx.fill()
-
-  ctx.fillStyle = '#172327'
-  ctx.fillRect(360, 500, 310, 210)
-  ctx.fillStyle = '#10191c'
-  ctx.beginPath()
-  ctx.moveTo(328, 505)
-  ctx.lineTo(515, 360)
-  ctx.lineTo(704, 505)
-  ctx.closePath()
-  ctx.fill()
-
-  ctx.fillStyle = '#d7924a'
-  ctx.shadowColor = '#d7924a'
-  ctx.shadowBlur = 34
-  ctx.fillRect(418, 565, 58, 66)
-  ctx.fillRect(556, 565, 58, 66)
-  ctx.shadowBlur = 0
-  ctx.fillStyle = '#090b0b'
-  ctx.fillRect(492, 602, 45, 108)
 
   ctx.strokeStyle = 'rgba(210, 230, 240, 0.18)'
   ctx.lineWidth = 2
