@@ -232,10 +232,12 @@ export const rainFragmentShader = `
     #endif
 
     float gameRainMask = clamp(c.x * 1.8 + c.y * .45, 0., 1.);
+    float lowerPlayfield = smoothstep(.16, 0., UV.y);
     vec3 gameRain = mix(vec3(.08, .13, .15), vec3(.72, .88, 1.), gameRainMask);
-    col = mix(col, gameRain, uGame * .74);
+    col = mix(col, gameRain, uGame * .74 * (1. - lowerPlayfield * .68));
 
     float alpha = mix(1., clamp(.1 + gameRainMask * .36, .12, .52), uGame) * uOpacity;
+    alpha *= 1. - uGame * lowerPlayfield * .72;
     fragColor = vec4(col, alpha);
   }
 

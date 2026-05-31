@@ -29,6 +29,7 @@ const SHELTER_CENTER = { x: GAME_SHELTER.position.x, y: GAME_SHELTER.position.y 
 const MAX_SPEED = 1.8
 const REPEL_RADIUS = 0.78
 const REPEL_FORCE = 4.4
+const HAZARD_RENDER_ORDER = 12
 
 type Point = {
   x: number
@@ -70,27 +71,43 @@ function pointInTriangle(point: Point, a: Point, b: Point, c: Point) {
 
 function circleTouchesShelter(point: Point, radius: number) {
   const padding = radius * GAME_SHELTER.hazardCollisionScale + GAME_SHELTER.collisionPadding
-  const bodyHalfWidth = (GAME_SHELTER.body.width * GAME_SHELTER.scale) / 2
-  const bodyHalfHeight = (GAME_SHELTER.body.height * GAME_SHELTER.scale) / 2
-  const bodyCenter = {
-    x: GAME_SHELTER.position.x,
-    y: GAME_SHELTER.position.y + GAME_SHELTER.body.centerY * GAME_SHELTER.scale,
-  }
-
-  const closestBodyX = MathUtils.clamp(point.x, bodyCenter.x - bodyHalfWidth, bodyCenter.x + bodyHalfWidth)
-  const closestBodyY = MathUtils.clamp(point.y, bodyCenter.y - bodyHalfHeight, bodyCenter.y + bodyHalfHeight)
-  if (Math.hypot(point.x - closestBodyX, point.y - closestBodyY) <= padding) return true
 
   const roofLeft = toWorldPoint(GAME_SHELTER.roof.left)
   const roofRight = toWorldPoint(GAME_SHELTER.roof.right)
   const roofPeak = toWorldPoint(GAME_SHELTER.roof.peak)
+  const roofPadding = padding + GAME_SHELTER.roofThickness * GAME_SHELTER.scale
 
-  if (pointInTriangle(point, roofLeft, roofRight, roofPeak)) return true
+  if (distanceToSegment(point, roofLeft, roofPeak) <= roofPadding) return true
+  if (distanceToSegment(point, roofRight, roofPeak) <= roofPadding) return true
+
+  const postHalfWidth = (GAME_SHELTER.body.width * GAME_SHELTER.scale) / 2 + padding
+  const postBottom = GAME_SHELTER.position.y
+  const postTop = GAME_SHELTER.position.y + GAME_SHELTER.body.height * GAME_SHELTER.scale
+  if (
+    Math.abs(point.x - GAME_SHELTER.position.x) <= postHalfWidth &&
+    point.y >= postBottom - padding &&
+    point.y <= postTop + padding
+  ) {
+    return true
+  }
+
+  const entranceLeft = {
+    x: GAME_SHELTER.position.x - GAME_SHELTER.body.width * GAME_SHELTER.scale,
+    y: postBottom,
+  }
+  const entranceRight = {
+    x: GAME_SHELTER.position.x + GAME_SHELTER.body.width * GAME_SHELTER.scale,
+    y: postBottom,
+  }
+  const entranceTop = {
+    x: GAME_SHELTER.position.x,
+    y: postTop,
+  }
 
   return (
-    distanceToSegment(point, roofLeft, roofRight) <= padding ||
-    distanceToSegment(point, roofRight, roofPeak) <= padding ||
-    distanceToSegment(point, roofPeak, roofLeft) <= padding
+    pointInTriangle(point, entranceLeft, entranceRight, entranceTop) ||
+    distanceToSegment(point, entranceLeft, entranceTop) <= padding ||
+    distanceToSegment(point, entranceRight, entranceTop) <= padding
   )
 }
 
@@ -157,7 +174,7 @@ export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
     setHazards([])
     nextId.current = 1
     elapsed.current = 0
-    spawnTimer.current = 0
+    spawnTimer.current = 1.1
     statsTimer.current = 0
     hasLost.current = false
     onStatsChange({ elapsedSeconds: 0, hazardCount: 0 })
@@ -246,7 +263,7 @@ export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
   })
 
   return (
-    <group position={[0, 0, 0.38]}>
+    <group position={[0, 0, 0.38]} renderOrder={HAZARD_RENDER_ORDER}>
       {hazards.map((hazard) => (
         <group
           key={hazard.id}
@@ -255,12 +272,19 @@ export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
             else hazardGroups.current.delete(hazard.id)
           }}
           position={[hazard.x, hazard.y, 0]}
+          renderOrder={HAZARD_RENDER_ORDER}
         >
-          <mesh scale={hazard.radius * 1.85}>
+          <mesh scale={hazard.radius * 1.85} renderOrder={HAZARD_RENDER_ORDER}>
             <HazardGeometry kind={hazard.kind} />
-            <meshBasicMaterial color={hazard.color} transparent opacity={0.22} depthWrite={false} />
+            <meshBasicMaterial
+              color={hazard.color}
+              transparent
+              opacity={0.22}
+              depthTest={false}
+              depthWrite={false}
+            />
           </mesh>
-          <mesh scale={hazard.radius}>
+          <mesh scale={hazard.radius} renderOrder={HAZARD_RENDER_ORDER + 1}>
             <HazardGeometry kind={hazard.kind} />
             <meshStandardMaterial
               color={hazard.color}
@@ -268,11 +292,20 @@ export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
               emissiveIntensity={1.65}
               roughness={0.38}
               metalness={0.12}
+              depthTest={false}
+              depthWrite={false}
             />
           </mesh>
-          <mesh scale={hazard.radius * 1.08}>
+          <mesh scale={hazard.radius * 1.08} renderOrder={HAZARD_RENDER_ORDER + 2}>
             <HazardGeometry kind={hazard.kind} />
-            <meshBasicMaterial color="#fff7d6" wireframe transparent opacity={0.5} depthWrite={false} />
+            <meshBasicMaterial
+              color="#fff7d6"
+              wireframe
+              transparent
+              opacity={0.5}
+              depthTest={false}
+              depthWrite={false}
+            />
           </mesh>
         </group>
       ))}

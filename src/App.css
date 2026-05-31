@@ -24,7 +24,7 @@
   content: "";
   background:
     linear-gradient(90deg, rgba(3, 8, 9, 0.52), rgba(3, 8, 9, 0.04) 48%, rgba(3, 8, 9, 0.5)),
-    linear-gradient(180deg, rgba(3, 8, 9, 0.16), rgba(3, 8, 9, 0.34));
+    linear-gradient(180deg, rgba(3, 8, 9, 0.14), rgba(3, 8, 9, 0.16) 82%, rgba(3, 8, 9, 0.08));
 }
 
 .hud {

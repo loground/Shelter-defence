@@ -47,7 +47,7 @@ export function Campfire({ active }: CampfireProps) {
 
   useFrame(({ clock }, delta) => {
     const time = clock.elapsedTime;
-    const intensity = active ? 1 : 0.72;
+    const intensity = active ? 1 : 0.96;
 
     for (let index = 0; index < PARTICLE_COUNT; index += 1) {
       const particle = particles[index];
@@ -81,7 +81,7 @@ export function Campfire({ active }: CampfireProps) {
 
     if (light.current) {
       light.current.intensity =
-        (active ? 4.8 : 3.2) + Math.sin(time * 13.0) * 0.42 + Math.sin(time * 21.0) * 0.22;
+        (active ? 4.8 : 5.6) + Math.sin(time * 13.0) * 0.42 + Math.sin(time * 21.0) * 0.22;
     }
   });
 
