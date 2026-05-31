@@ -1,11 +1,13 @@
+import { useGLTF } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
-import type { Group } from 'three'
-import { MathUtils } from 'three'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { Material, Object3D } from 'three'
+import { Box3, Group, MathUtils, Vector3 } from 'three'
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { GAME_SHELTER } from '../config/shelter'
 import type { GameStats } from '../types/game'
 
-type HazardKind = 'box' | 'octahedron' | 'tetrahedron'
+type HazardKind = 'bottle' | 'can' | 'rock' | 'stick'
 
 type Hazard = {
   id: number
@@ -30,6 +32,29 @@ const MAX_SPEED = 1.8
 const REPEL_RADIUS = 0.78
 const REPEL_FORCE = 4.4
 const HAZARD_RENDER_ORDER = 12
+const DRACO_DECODER_PATH = '/draco/'
+const BASIS_TRANSCODER_PATH = '/basis/'
+const HAZARD_MODELS: Record<HazardKind, string> = {
+  bottle: '/3d/bottle1.glb',
+  can: '/3d/can1.glb',
+  rock: '/3d/rock1.glb',
+  stick: '/3d/stick1.glb',
+}
+const HAZARD_MODEL_ROTATIONS: Record<HazardKind, readonly [number, number, number]> = {
+  bottle: [0.35, -0.25, -0.7],
+  can: [0.45, 0.15, 0.45],
+  rock: [0.1, 0.2, 0.25],
+  stick: [0.15, 0.25, 1.1],
+}
+const modelBox = new Box3()
+const modelCenter = new Vector3()
+const modelSize = new Vector3()
+
+type ExtendGltfLoader = NonNullable<Parameters<typeof useGLTF>[3]>
+type Ktx2CapableLoader = { setKTX2Loader: (loader: unknown) => void }
+type MaterialObject = Object3D & {
+  material: Material | Material[]
+}
 
 type Point = {
   x: number
@@ -132,13 +157,12 @@ function createHazard(id: number, bounds: { x: number; y: number }): Hazard {
 
   const towardShelter = Math.atan2(SHELTER_CENTER.y - y, SHELTER_CENTER.x - x)
   const speed = randomBetween(0.34, 0.62)
-  const kinds: HazardKind[] = ['box', 'octahedron', 'tetrahedron']
-  const colors = ['#ff5e57', '#ffd166', '#5ee0ff', '#da77ff', '#fff3b0']
+  const kinds: HazardKind[] = ['bottle', 'can', 'rock', 'stick']
 
   return {
     id,
     kind: kinds[id % kinds.length],
-    color: colors[id % colors.length],
+    color: '#fff3b0',
     radius,
     spin: randomBetween(-2.4, 2.4),
     x,
@@ -148,10 +172,95 @@ function createHazard(id: number, bounds: { x: number; y: number }): Hazard {
   }
 }
 
-function HazardGeometry({ kind }: { kind: HazardKind }) {
-  if (kind === 'octahedron') return <octahedronGeometry args={[1, 0]} />
-  if (kind === 'tetrahedron') return <tetrahedronGeometry args={[1, 0]} />
-  return <boxGeometry args={[1.15, 1.15, 1.15]} />
+function prepareHazardObject(object: Object3D) {
+  object.frustumCulled = false
+  object.renderOrder = HAZARD_RENDER_ORDER + 1
+
+  if ('material' in object) {
+    const materialObject = object as MaterialObject
+    const materials = Array.isArray(materialObject.material) ? materialObject.material : [materialObject.material]
+    materials.forEach((material) => {
+      material.depthTest = false
+      material.depthWrite = false
+      material.needsUpdate = true
+    })
+  }
+}
+
+function normalizeHazardTemplate(scene: Object3D) {
+  const clone = scene.clone(true)
+  clone.traverse(prepareHazardObject)
+  modelBox.setFromObject(clone)
+  modelBox.getCenter(modelCenter)
+  modelBox.getSize(modelSize)
+  clone.position.sub(modelCenter)
+
+  const normalized = new Group()
+  const largestSide = Math.max(modelSize.x, modelSize.y, modelSize.z, 0.001)
+  normalized.scale.setScalar(1 / largestSide)
+  normalized.add(clone)
+  return normalized
+}
+
+function useHazardLoader() {
+  const { gl } = useThree()
+  const ktx2Loader = useMemo(() => {
+    const loader = new KTX2Loader()
+    loader.setTranscoderPath(BASIS_TRANSCODER_PATH)
+    loader.detectSupport(gl)
+    return loader
+  }, [gl])
+  const extendLoader = useCallback(
+    ((loader: Ktx2CapableLoader) => {
+      loader.setKTX2Loader(ktx2Loader)
+    }) as ExtendGltfLoader,
+    [ktx2Loader],
+  )
+
+  useEffect(() => {
+    return () => {
+      ktx2Loader.dispose()
+    }
+  }, [ktx2Loader])
+
+  return extendLoader
+}
+
+function useHazardTemplates(extendLoader: ExtendGltfLoader) {
+  const bottle = useGLTF(HAZARD_MODELS.bottle, DRACO_DECODER_PATH, false, extendLoader)
+  const can = useGLTF(HAZARD_MODELS.can, DRACO_DECODER_PATH, false, extendLoader)
+  const rock = useGLTF(HAZARD_MODELS.rock, DRACO_DECODER_PATH, false, extendLoader)
+  const stick = useGLTF(HAZARD_MODELS.stick, DRACO_DECODER_PATH, false, extendLoader)
+
+  return useMemo(
+    () => ({
+      bottle: normalizeHazardTemplate(bottle.scene),
+      can: normalizeHazardTemplate(can.scene),
+      rock: normalizeHazardTemplate(rock.scene),
+      stick: normalizeHazardTemplate(stick.scene),
+    }),
+    [bottle.scene, can.scene, rock.scene, stick.scene],
+  )
+}
+
+export function HazardAssetsPreload() {
+  const extendLoader = useHazardLoader()
+  useHazardTemplates(extendLoader)
+  return null
+}
+
+function HazardModel({ kind, radius, templates }: { kind: HazardKind; radius: number; templates: Record<HazardKind, Group> }) {
+  const model = useMemo(() => {
+    const clone = templates[kind].clone(true)
+    clone.traverse(prepareHazardObject)
+    return clone
+  }, [kind, radius, templates])
+
+  return (
+    <group scale={radius * 1.9} rotation={HAZARD_MODEL_ROTATIONS[kind]}>
+      <primitive object={model} />
+    </group>
+  )
 }
 
 export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
@@ -164,6 +273,8 @@ export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
   const spawnTimer = useRef(0)
   const statsTimer = useRef(0)
   const hasLost = useRef(false)
+  const extendLoader = useHazardLoader()
+  const hazardTemplates = useHazardTemplates(extendLoader)
 
   useEffect(() => {
     hazardsRef.current = hazards
@@ -274,39 +385,11 @@ export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
           position={[hazard.x, hazard.y, 0]}
           renderOrder={HAZARD_RENDER_ORDER}
         >
-          <mesh scale={hazard.radius * 1.85} renderOrder={HAZARD_RENDER_ORDER}>
-            <HazardGeometry kind={hazard.kind} />
-            <meshBasicMaterial
-              color={hazard.color}
-              transparent
-              opacity={0.22}
-              depthTest={false}
-              depthWrite={false}
-            />
+          <mesh scale={hazard.radius * 2.05} renderOrder={HAZARD_RENDER_ORDER}>
+            <sphereGeometry args={[1, 18, 12]} />
+            <meshBasicMaterial color={hazard.color} transparent opacity={0.2} depthTest={false} depthWrite={false} />
           </mesh>
-          <mesh scale={hazard.radius} renderOrder={HAZARD_RENDER_ORDER + 1}>
-            <HazardGeometry kind={hazard.kind} />
-            <meshStandardMaterial
-              color={hazard.color}
-              emissive={hazard.color}
-              emissiveIntensity={1.65}
-              roughness={0.38}
-              metalness={0.12}
-              depthTest={false}
-              depthWrite={false}
-            />
-          </mesh>
-          <mesh scale={hazard.radius * 1.08} renderOrder={HAZARD_RENDER_ORDER + 2}>
-            <HazardGeometry kind={hazard.kind} />
-            <meshBasicMaterial
-              color="#fff7d6"
-              wireframe
-              transparent
-              opacity={0.5}
-              depthTest={false}
-              depthWrite={false}
-            />
-          </mesh>
+          <HazardModel kind={hazard.kind} radius={hazard.radius} templates={hazardTemplates} />
         </group>
       ))}
     </group>

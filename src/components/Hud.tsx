@@ -32,6 +32,10 @@ export function Hud({ phase, stats, onPlay, onRestart }: HudProps) {
       ) : isLost ? (
         <div className="loss-panel">
           <p>Storm breached</p>
+          <div className="score-readout" aria-label="Final score">
+            <span>{formatTime(stats.elapsedSeconds)}</span>
+            <small>{stats.hazardCount} threats survived</small>
+          </div>
           <button className="play-button" type="button" onClick={onRestart}>
             <span className="play-icon" aria-hidden="true" />
             Again

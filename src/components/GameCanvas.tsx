@@ -1,10 +1,10 @@
 import { useProgress } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { MathUtils } from 'three'
 import { RainOnGlass } from '../effects/RainOnGlass'
 import { getWavedash } from '../lib/wavedash'
-import { Hazards } from '../scenes/Hazards'
+import { HazardAssetsPreload, Hazards } from '../scenes/Hazards'
 import { ShelterScene } from '../scenes/ShelterScene'
 import type { GamePhase, GameStats } from '../types/game'
 
@@ -75,6 +75,9 @@ export function GameCanvas({ phase, runId, onLose, onStatsChange }: GameCanvasPr
     <Canvas camera={{ position: [0, 1.25, 5], fov: 42 }}>
       <WavedashBoot ready={assetsReady} />
       <CameraRig phase={phase} />
+      <Suspense fallback={null}>
+        <HazardAssetsPreload />
+      </Suspense>
       <ShelterScene phase={phase} onReady={handleSceneReady} />
       {hasStarted && (
         <Hazards key={runId} active={phase === 'playing'} onLose={onLose} onStatsChange={onStatsChange} />
