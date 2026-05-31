@@ -10,6 +10,7 @@ import { getWavedash } from '../wavedash'
 type GameCanvasProps = {
   phase: GamePhase
   runId: number
+  blastId: number
   onLose: () => void
   onStatsChange: (stats: GameStats) => void
 }
@@ -62,7 +63,7 @@ function WavedashBoot({ ready }: { ready: boolean }) {
   return null
 }
 
-export function GameCanvas({ phase, runId, onLose, onStatsChange }: GameCanvasProps) {
+export function GameCanvas({ phase, runId, blastId, onLose, onStatsChange }: GameCanvasProps) {
   const [assetsReady, setAssetsReady] = useState(false)
   const hasStarted = phase !== 'launch'
   const handleSceneReady = useCallback(() => {
@@ -78,7 +79,13 @@ export function GameCanvas({ phase, runId, onLose, onStatsChange }: GameCanvasPr
       </Suspense>
       <ShelterScene phase={phase} onReady={handleSceneReady} />
       {hasStarted && (
-        <Hazards key={runId} active={phase === 'playing'} onLose={onLose} onStatsChange={onStatsChange} />
+        <Hazards
+          key={runId}
+          active={phase === 'playing'}
+          blastId={blastId}
+          onLose={onLose}
+          onStatsChange={onStatsChange}
+        />
       )}
       <RainOnGlass phase={phase} />
     </Canvas>

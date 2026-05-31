@@ -15,8 +15,8 @@ export const GAME_SHELTER = {
     right: [1.35, 0.08] as const,
     peak: [0, 3.05] as const,
   },
-  roofThickness: 0.015,
-  collisionPadding: 0.005,
-  hazardCollisionScale: 0.16,
+  roofThickness: 0.006,
+  collisionPadding: 0.002,
+  hazardCollisionScale: 0.06,
   spawnClearance: 1.65,
 }

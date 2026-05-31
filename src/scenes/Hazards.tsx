@@ -1,8 +1,8 @@
 import { useGLTF } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Material, Object3D } from 'three'
-import { Box3, Group, MathUtils, Vector3 } from 'three'
+import type { Material, Mesh, Object3D } from 'three'
+import { AdditiveBlending, Box3, Group, MathUtils, Vector3 } from 'three'
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { GAME_SHELTER } from '../config/shelter'
 import type { GameStats } from '../types/game'
@@ -21,8 +21,17 @@ type Hazard = {
   vy: number
 }
 
+type UmbrellaBonus = {
+  id: number
+  age: number
+  radius: number
+  x: number
+  y: number
+}
+
 type HazardsProps = {
   active: boolean
+  blastId: number
   onLose: () => void
   onStatsChange: (stats: GameStats) => void
 }
@@ -32,6 +41,9 @@ const MAX_SPEED = 1.8
 const REPEL_RADIUS = 0.78
 const REPEL_FORCE = 4.4
 const HAZARD_RENDER_ORDER = 12
+const UMBRELLA_MODEL_URL = '/3d/umbrella.glb'
+const UMBRELLA_LIFETIME = 3
+const SHIELD_DURATION = 7
 const DRACO_DECODER_PATH = '/draco/'
 const BASIS_TRANSCODER_PATH = '/basis/'
 const HAZARD_MODELS: Record<HazardKind, string> = {
@@ -85,15 +97,6 @@ function distanceToSegment(point: Point, start: Point, end: Point) {
   return Math.hypot(point.x - closestX, point.y - closestY)
 }
 
-function pointInTriangle(point: Point, a: Point, b: Point, c: Point) {
-  const d1 = (point.x - b.x) * (a.y - b.y) - (a.x - b.x) * (point.y - b.y)
-  const d2 = (point.x - c.x) * (b.y - c.y) - (b.x - c.x) * (point.y - c.y)
-  const d3 = (point.x - a.x) * (c.y - a.y) - (c.x - a.x) * (point.y - a.y)
-  const hasNegative = d1 < 0 || d2 < 0 || d3 < 0
-  const hasPositive = d1 > 0 || d2 > 0 || d3 > 0
-  return !(hasNegative && hasPositive)
-}
-
 function circleTouchesShelter(point: Point, radius: number) {
   const padding = radius * GAME_SHELTER.hazardCollisionScale + GAME_SHELTER.collisionPadding
 
@@ -130,7 +133,6 @@ function circleTouchesShelter(point: Point, radius: number) {
   }
 
   return (
-    pointInTriangle(point, entranceLeft, entranceRight, entranceTop) ||
     distanceToSegment(point, entranceLeft, entranceTop) <= padding ||
     distanceToSegment(point, entranceRight, entranceTop) <= padding
   )
@@ -243,9 +245,15 @@ function useHazardTemplates(extendLoader: ExtendGltfLoader) {
   )
 }
 
+function useUmbrellaTemplate(extendLoader: ExtendGltfLoader) {
+  const umbrella = useGLTF(UMBRELLA_MODEL_URL, DRACO_DECODER_PATH, false, extendLoader)
+  return useMemo(() => normalizeHazardTemplate(umbrella.scene), [umbrella.scene])
+}
+
 export function HazardAssetsPreload() {
   const extendLoader = useHazardLoader()
   useHazardTemplates(extendLoader)
+  useUmbrellaTemplate(extendLoader)
   return null
 }
 
@@ -263,33 +271,194 @@ function HazardModel({ kind, radius, templates }: { kind: HazardKind; radius: nu
   )
 }
 
-export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
+function UmbrellaModel({ radius, template }: { radius: number; template: Group }) {
+  const model = useMemo(() => {
+    const clone = template.clone(true)
+    clone.traverse(prepareHazardObject)
+    return clone
+  }, [template])
+
+  return (
+    <group scale={radius * 2.1} rotation={[0.35, -0.15, -0.35]}>
+      <primitive object={model} />
+    </group>
+  )
+}
+
+function StormBurstEffect({ blastId }: { blastId: number }) {
+  const ring = useRef<Mesh>(null)
+  const glow = useRef<Mesh>(null)
+  const age = useRef(999)
+
+  useEffect(() => {
+    if (blastId > 0) age.current = 0
+  }, [blastId])
+
+  useFrame((_, delta) => {
+    age.current += delta
+    const progress = MathUtils.clamp(age.current / 0.78, 0, 1)
+    const opacity = Math.sin((1 - progress) * Math.PI * 0.5)
+
+    if (ring.current) {
+      ring.current.visible = progress < 1
+      ring.current.scale.setScalar(0.35 + progress * 5.7)
+      const material = ring.current.material as Material & { opacity: number }
+      material.opacity = opacity * 0.72
+    }
+
+    if (glow.current) {
+      glow.current.visible = progress < 1
+      glow.current.scale.setScalar(0.5 + progress * 7.4)
+      const material = glow.current.material as Material & { opacity: number }
+      material.opacity = (1 - progress) * 0.22
+    }
+  })
+
+  return (
+    <group position={[0, 0, 0.08]} renderOrder={HAZARD_RENDER_ORDER + 6}>
+      <mesh ref={glow} renderOrder={HAZARD_RENDER_ORDER + 6} visible={false}>
+        <circleGeometry args={[1, 48]} />
+        <meshBasicMaterial
+          color="#ffe5a0"
+          transparent
+          opacity={0}
+          depthTest={false}
+          depthWrite={false}
+          blending={AdditiveBlending}
+        />
+      </mesh>
+      <mesh ref={ring} renderOrder={HAZARD_RENDER_ORDER + 7} visible={false}>
+        <ringGeometry args={[0.92, 1, 80]} />
+        <meshBasicMaterial
+          color="#fff6d0"
+          transparent
+          opacity={0}
+          depthTest={false}
+          depthWrite={false}
+          blending={AdditiveBlending}
+        />
+      </mesh>
+    </group>
+  )
+}
+
+function ShelterShield({ active }: { active: boolean }) {
+  const shield = useRef<Mesh>(null)
+  const ring = useRef<Mesh>(null)
+
+  useFrame(({ clock }) => {
+    const pulse = Math.sin(clock.elapsedTime * 5.6) * 0.5 + 0.5
+
+    if (shield.current) {
+      shield.current.visible = active
+      shield.current.scale.set(1.0 + pulse * 0.025, 1.12 + pulse * 0.03, 1)
+      const material = shield.current.material as Material & { opacity: number }
+      material.opacity = active ? 0.08 + pulse * 0.025 : 0
+    }
+
+    if (ring.current) {
+      ring.current.visible = active
+      ring.current.scale.set(1.03 + pulse * 0.035, 1.15 + pulse * 0.04, 1)
+      const material = ring.current.material as Material & { opacity: number }
+      material.opacity = active ? 0.32 + pulse * 0.1 : 0
+    }
+  })
+
+  return (
+    <group position={[GAME_SHELTER.position.x, GAME_SHELTER.position.y + 0.38, 0.06]} renderOrder={HAZARD_RENDER_ORDER + 4}>
+      <mesh ref={shield} visible={false} renderOrder={HAZARD_RENDER_ORDER + 4}>
+        <circleGeometry args={[1, 64]} />
+        <meshBasicMaterial
+          color="#8de8ff"
+          transparent
+          opacity={0}
+          depthTest={false}
+          depthWrite={false}
+          blending={AdditiveBlending}
+        />
+      </mesh>
+      <mesh ref={ring} visible={false} renderOrder={HAZARD_RENDER_ORDER + 5}>
+        <ringGeometry args={[0.96, 1, 96]} />
+        <meshBasicMaterial
+          color="#bdf7ff"
+          transparent
+          opacity={0}
+          depthTest={false}
+          depthWrite={false}
+          blending={AdditiveBlending}
+        />
+      </mesh>
+    </group>
+  )
+}
+
+export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps) {
   const { pointer, viewport } = useThree()
   const [hazards, setHazards] = useState<Hazard[]>([])
+  const [umbrellaBonus, setUmbrellaBonus] = useState<UmbrellaBonus | null>(null)
+  const [shieldActive, setShieldActive] = useState(false)
   const hazardsRef = useRef<Hazard[]>([])
+  const umbrellaBonusRef = useRef<UmbrellaBonus | null>(null)
   const hazardGroups = useRef(new Map<number, Group>())
+  const umbrellaGroup = useRef<Group>(null)
   const nextId = useRef(1)
+  const nextBonusId = useRef(1)
   const elapsed = useRef(0)
   const spawnTimer = useRef(0)
+  const bonusSpawnTimer = useRef(0)
   const statsTimer = useRef(0)
   const hasLost = useRef(false)
+  const shieldUntil = useRef(0)
+  const shieldActiveRef = useRef(false)
   const extendLoader = useHazardLoader()
   const hazardTemplates = useHazardTemplates(extendLoader)
+  const umbrellaTemplate = useUmbrellaTemplate(extendLoader)
 
   useEffect(() => {
     hazardsRef.current = hazards
   }, [hazards])
 
   useEffect(() => {
+    umbrellaBonusRef.current = umbrellaBonus
+  }, [umbrellaBonus])
+
+  useEffect(() => {
+    shieldActiveRef.current = shieldActive
+  }, [shieldActive])
+
+  useEffect(() => {
     hazardsRef.current = []
+    umbrellaBonusRef.current = null
     setHazards([])
+    setUmbrellaBonus(null)
+    setShieldActive(false)
     nextId.current = 1
+    nextBonusId.current = 1
     elapsed.current = 0
     spawnTimer.current = 1.1
+    bonusSpawnTimer.current = randomBetween(8, 13)
     statsTimer.current = 0
     hasLost.current = false
+    shieldUntil.current = 0
     onStatsChange({ elapsedSeconds: 0, hazardCount: 0 })
   }, [onStatsChange])
+
+  useEffect(() => {
+    if (blastId <= 0 || hasLost.current) return
+
+    hazardsRef.current = []
+    umbrellaBonusRef.current = null
+    setHazards([])
+    setUmbrellaBonus(null)
+    nextId.current = 1
+    spawnTimer.current = 0.7
+    bonusSpawnTimer.current = randomBetween(8, 13)
+    statsTimer.current = 0
+    onStatsChange({
+      elapsedSeconds: Math.floor(elapsed.current),
+      hazardCount: 0,
+    })
+  }, [blastId, onStatsChange])
 
   useFrame((_, rawDelta) => {
     if (!active || hasLost.current) return
@@ -297,6 +466,7 @@ export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
     const delta = Math.min(rawDelta, 0.033)
     elapsed.current += delta
     spawnTimer.current -= delta
+    bonusSpawnTimer.current -= delta
     statsTimer.current -= delta
 
     const bounds = {
@@ -318,6 +488,50 @@ export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
       x: pointer.x * viewport.width * 0.5,
       y: pointer.y * viewport.height * 0.5,
     }
+
+    if (shieldActiveRef.current && elapsed.current >= shieldUntil.current) {
+      shieldActiveRef.current = false
+      setShieldActive(false)
+    }
+
+    if (!umbrellaBonusRef.current && bonusSpawnTimer.current <= 0) {
+      const bonus = {
+        id: nextBonusId.current,
+        age: 0,
+        radius: 0.28,
+        x: randomBetween(-bounds.x * 0.72, bounds.x * 0.72),
+        y: randomBetween(-bounds.y * 0.18, bounds.y * 0.72),
+      }
+
+      nextBonusId.current += 1
+      umbrellaBonusRef.current = bonus
+      setUmbrellaBonus(bonus)
+      bonusSpawnTimer.current = randomBetween(11, 17)
+    }
+
+    const bonus = umbrellaBonusRef.current
+    if (bonus) {
+      bonus.age += delta
+
+      const bonusDistance = Math.hypot(bonus.x - mouse.x, bonus.y - mouse.y)
+      if (bonusDistance <= bonus.radius + 0.22) {
+        umbrellaBonusRef.current = null
+        setUmbrellaBonus(null)
+        shieldUntil.current = elapsed.current + SHIELD_DURATION
+        shieldActiveRef.current = true
+        setShieldActive(true)
+      } else if (bonus.age >= UMBRELLA_LIFETIME) {
+        umbrellaBonusRef.current = null
+        setUmbrellaBonus(null)
+      } else if (umbrellaGroup.current) {
+        umbrellaGroup.current.position.set(bonus.x, bonus.y, 0)
+        umbrellaGroup.current.rotation.z += delta * 0.65
+        umbrellaGroup.current.rotation.y += delta * 0.9
+      }
+    }
+
+    let changedHazards = false
+    const nextHazards: Hazard[] = []
 
     for (const hazard of hazardsRef.current) {
       const dx = hazard.x - mouse.x
@@ -351,6 +565,11 @@ export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
       }
 
       if (circleTouchesShelter(hazard, hazard.radius)) {
+        if (shieldActiveRef.current) {
+          changedHazards = true
+          continue
+        }
+
         hasLost.current = true
         onLose()
         return
@@ -362,6 +581,13 @@ export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
         group.rotation.x += hazard.spin * delta
         group.rotation.y += (hazard.spin * 0.73 + 0.4) * delta
       }
+
+      nextHazards.push(hazard)
+    }
+
+    if (changedHazards) {
+      hazardsRef.current = nextHazards
+      setHazards(nextHazards)
     }
 
     if (statsTimer.current <= 0) {
@@ -375,6 +601,35 @@ export function Hazards({ active, onLose, onStatsChange }: HazardsProps) {
 
   return (
     <group position={[0, 0, 0.38]} renderOrder={HAZARD_RENDER_ORDER}>
+      <ShelterShield active={shieldActive} />
+      <StormBurstEffect blastId={blastId} />
+      {umbrellaBonus && (
+        <group ref={umbrellaGroup} position={[umbrellaBonus.x, umbrellaBonus.y, 0]} renderOrder={HAZARD_RENDER_ORDER + 3}>
+          <mesh scale={umbrellaBonus.radius * 2.2} renderOrder={HAZARD_RENDER_ORDER + 2}>
+            <sphereGeometry args={[1, 24, 14]} />
+            <meshBasicMaterial
+              color="#6ee7ff"
+              transparent
+              opacity={0.28}
+              depthTest={false}
+              depthWrite={false}
+              blending={AdditiveBlending}
+            />
+          </mesh>
+          <mesh scale={umbrellaBonus.radius * 2.55} renderOrder={HAZARD_RENDER_ORDER + 2}>
+            <ringGeometry args={[0.92, 1, 56]} />
+            <meshBasicMaterial
+              color="#d9fbff"
+              transparent
+              opacity={0.68}
+              depthTest={false}
+              depthWrite={false}
+              blending={AdditiveBlending}
+            />
+          </mesh>
+          <UmbrellaModel radius={umbrellaBonus.radius} template={umbrellaTemplate} />
+        </group>
+      )}
       {hazards.map((hazard) => (
         <group
           key={hazard.id}

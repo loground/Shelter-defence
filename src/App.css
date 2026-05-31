@@ -39,6 +39,99 @@
   pointer-events: none;
 }
 
+.mute-button {
+  position: absolute;
+  top: clamp(1rem, 2.2vw, 1.6rem);
+  right: clamp(1rem, 2.2vw, 1.6rem);
+  z-index: 3;
+  min-height: 2.4rem;
+  border: 1px solid rgba(247, 239, 226, 0.3);
+  border-radius: 8px;
+  padding: 0 0.78rem;
+  color: #f9f1e6;
+  background: rgba(5, 12, 13, 0.58);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  pointer-events: auto;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition:
+    border-color 180ms ease,
+    color 180ms ease,
+    background-color 180ms ease;
+}
+
+.mute-button:hover {
+  border-color: rgba(230, 181, 94, 0.76);
+  background: rgba(15, 23, 22, 0.78);
+}
+
+.mute-button[aria-pressed="true"] {
+  color: rgba(234, 218, 194, 0.62);
+}
+
+.audio-choice {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 4;
+  display: grid;
+  width: min(calc(100vw - 2rem), 22rem);
+  gap: 1rem;
+  border: 1px solid rgba(221, 204, 177, 0.28);
+  border-radius: 8px;
+  padding: 1.2rem;
+  color: #f7efe2;
+  background: rgba(5, 12, 13, 0.78);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  backdrop-filter: blur(14px);
+}
+
+.audio-choice p {
+  margin: 0;
+  color: #f1c0a4;
+  font-size: 0.92rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.audio-choice-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.audio-choice button {
+  min-height: 3rem;
+  border: 1px solid rgba(247, 239, 226, 0.56);
+  border-radius: 8px;
+  color: #f9f1e6;
+  background: rgba(9, 17, 18, 0.7);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.audio-choice button:hover {
+  border-color: #e6b55e;
+  background: rgba(24, 29, 25, 0.84);
+}
+
 .brand {
   max-width: min(560px, calc(100vw - 2.5rem));
   opacity: 1;
@@ -140,6 +233,24 @@ h1 {
 
 .status-panel {
   pointer-events: none;
+}
+
+.power-status {
+  border: 1px solid rgba(247, 239, 226, 0.2);
+  border-radius: 8px;
+  padding: 0.38rem 0.62rem;
+  background: rgba(255, 214, 126, 0.08);
+}
+
+.power-status.is-ready {
+  color: #fff1bd;
+  border-color: rgba(255, 218, 139, 0.42);
+  box-shadow: inset 0 0 18px rgba(255, 178, 82, 0.12);
+}
+
+.power-status.is-spent {
+  color: rgba(234, 218, 194, 0.5);
+  background: rgba(5, 12, 13, 0.42);
 }
 
 .loss-panel {
