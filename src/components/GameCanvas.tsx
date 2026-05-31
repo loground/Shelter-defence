@@ -1,12 +1,11 @@
-import { useProgress } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { MathUtils } from 'three'
 import { RainOnGlass } from '../effects/RainOnGlass'
-import { getWavedash } from '../lib/wavedash'
 import { HazardAssetsPreload, Hazards } from '../scenes/Hazards'
 import { ShelterScene } from '../scenes/ShelterScene'
 import type { GamePhase, GameStats } from '../types/game'
+import { getWavedash } from '../wavedash'
 
 type GameCanvasProps = {
   phase: GamePhase
@@ -16,6 +15,7 @@ type GameCanvasProps = {
 }
 
 let didStartWavedashInit = false
+let didReportInitialWavedashProgress = false
 
 function CameraRig({ phase }: { phase: GamePhase }) {
   const { camera } = useThree()
@@ -40,26 +40,24 @@ function CameraRig({ phase }: { phase: GamePhase }) {
 }
 
 function WavedashBoot({ ready }: { ready: boolean }) {
-  const { active, progress } = useProgress()
-
   useEffect(() => {
-    if (didStartWavedashInit) return
+    if (didReportInitialWavedashProgress) return
 
-    const normalizedProgress = Math.min(Math.max(progress / 100, 0), 1)
     void getWavedash().then((Wavedash) => {
-      Wavedash?.updateLoadProgressZeroToOne(normalizedProgress)
+      Wavedash.updateLoadProgressZeroToOne(0.3)
+      didReportInitialWavedashProgress = true
     })
-  }, [progress])
+  }, [])
 
   useEffect(() => {
-    if (didStartWavedashInit || !ready || active || progress < 100) return
+    if (didStartWavedashInit || !ready) return
 
     didStartWavedashInit = true
     void getWavedash().then((Wavedash) => {
-      Wavedash?.updateLoadProgressZeroToOne(1)
-      Wavedash?.init({ debug: true })
+      Wavedash.updateLoadProgressZeroToOne(1)
+      Wavedash.init({ debug: true })
     })
-  }, [active, progress, ready])
+  }, [ready])
 
   return null
 }
