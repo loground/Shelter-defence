@@ -76,7 +76,8 @@
   color: rgba(234, 218, 194, 0.62);
 }
 
-.audio-choice {
+.audio-choice,
+.game-intro {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -98,7 +99,8 @@
   backdrop-filter: blur(14px);
 }
 
-.audio-choice p {
+.audio-choice p,
+.intro-kicker {
   margin: 0;
   color: #f1c0a4;
   font-size: 0.92rem;
@@ -113,7 +115,8 @@
   gap: 0.7rem;
 }
 
-.audio-choice button {
+.audio-choice button,
+.intro-actions button {
   min-height: 3rem;
   border: 1px solid rgba(247, 239, 226, 0.56);
   border-radius: 8px;
@@ -127,9 +130,48 @@
   cursor: pointer;
 }
 
-.audio-choice button:hover {
+.audio-choice button:hover,
+.intro-actions button:hover {
   border-color: #e6b55e;
   background: rgba(24, 29, 25, 0.84);
+}
+
+.game-intro {
+  width: min(calc(100vw - 2rem), 32rem);
+  gap: 1rem;
+  text-align: left;
+}
+
+.game-intro h2 {
+  margin: 0;
+  color: #fff5df;
+  font-size: clamp(1.65rem, 4vw, 2.8rem);
+  line-height: 0.98;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.intro-copy {
+  display: grid;
+  gap: 0.72rem;
+  color: #eadac2;
+  font-size: clamp(0.92rem, 2vw, 1rem);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.intro-copy p {
+  margin: 0;
+}
+
+.intro-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.intro-actions button:only-child {
+  grid-column: 1 / -1;
 }
 
 .brand {
@@ -198,7 +240,8 @@ h1 {
   background: rgba(24, 29, 25, 0.82);
 }
 
-.play-button:focus-visible {
+.play-button:focus-visible,
+.faq-button:focus-visible {
   outline: 3px solid rgba(230, 181, 94, 0.5);
   outline-offset: 4px;
 }
@@ -210,6 +253,46 @@ h1 {
   border-top: 0.42rem solid transparent;
   border-bottom: 0.42rem solid transparent;
   border-left: 0.66rem solid currentColor;
+}
+
+.launch-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  pointer-events: auto;
+}
+
+.faq-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.8rem;
+  min-height: 3.5rem;
+  border: 1px solid rgba(247, 239, 226, 0.38);
+  border-radius: 8px;
+  padding: 0 1rem;
+  color: #f9f1e6;
+  background: rgba(5, 12, 13, 0.56);
+  box-shadow:
+    0 14px 42px rgba(0, 0, 0, 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.faq-button:hover {
+  transform: translateY(-2px);
+  border-color: rgba(230, 181, 94, 0.76);
+  background: rgba(15, 23, 22, 0.78);
 }
 
 .status-panel,
@@ -323,6 +406,15 @@ h1 {
 
   .play-button {
     width: 100%;
+  }
+
+  .launch-actions {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .launch-actions .play-button {
+    flex: 1;
   }
 
   .status-panel {

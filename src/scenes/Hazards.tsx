@@ -4,6 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Material, Mesh, Object3D } from 'three'
 import { AdditiveBlending, Box3, Group, MathUtils, Vector3 } from 'three'
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
+import type { CollisionTriangle } from '../collision/shelterCollision'
+import {
+  getShelterCollisionTriangles,
+  trianglesFromObject,
+  trianglesIntersectTriangleSet,
+  trianglesTouchShelterMesh,
+} from '../collision/shelterCollision'
 import { GAME_SHELTER } from '../config/shelter'
 import type { GameStats } from '../types/game'
 
@@ -41,9 +48,21 @@ const MAX_SPEED = 1.8
 const REPEL_RADIUS = 0.78
 const REPEL_FORCE = 4.4
 const HAZARD_RENDER_ORDER = 12
+const HAZARD_LAYER_Z = 0.38
+const SHELTER_VISUAL_LAYER_Z = GAME_SHELTER.position.z - HAZARD_LAYER_Z + 0.02
 const UMBRELLA_MODEL_URL = '/3d/umbrella.glb'
 const UMBRELLA_LIFETIME = 3
 const SHIELD_DURATION = 7
+const SHIELD_CENTER = { x: GAME_SHELTER.position.x, y: GAME_SHELTER.position.y + 0.42 }
+const SHIELD_RADIUS = 1.02
+const ROOF_COLLISION_HALF_WIDTH = 0.045
+const BRACE_COLLISION_HALF_WIDTH = 0.034
+const COLLISION_ROOF = {
+  left: [-2.1, -1.58] as const,
+  right: [2.1, -1.58] as const,
+  peak: [0, 2.05] as const,
+}
+const COLLISION_POST_HEIGHT = 1.92
 const DRACO_DECODER_PATH = '/draco/'
 const BASIS_TRANSCODER_PATH = '/basis/'
 const HAZARD_MODELS: Record<HazardKind, string> = {
@@ -138,6 +157,110 @@ function circleTouchesShelter(point: Point, radius: number) {
   )
 }
 
+function circleTouchesShelterSilhouette(point: Point, radius: number) {
+  const hitRadius = radius * 1.08
+
+  const roofLeft = toWorldPoint(COLLISION_ROOF.left)
+  const roofRight = toWorldPoint(COLLISION_ROOF.right)
+  const roofPeak = toWorldPoint(COLLISION_ROOF.peak)
+
+  if (distanceToSegment(point, roofLeft, roofPeak) <= hitRadius) return true
+  if (distanceToSegment(point, roofRight, roofPeak) <= hitRadius) return true
+
+  const postBottom = GAME_SHELTER.position.y
+  const postTop = GAME_SHELTER.position.y + COLLISION_POST_HEIGHT * GAME_SHELTER.scale
+  const postHalfWidth = (GAME_SHELTER.body.width * GAME_SHELTER.scale) / 2
+  if (
+    Math.abs(point.x - GAME_SHELTER.position.x) <= postHalfWidth + hitRadius &&
+    point.y >= postBottom - hitRadius &&
+    point.y <= postTop + hitRadius
+  ) {
+    return true
+  }
+
+  const entranceLeft = {
+    x: GAME_SHELTER.position.x - GAME_SHELTER.body.width * GAME_SHELTER.scale,
+    y: postBottom,
+  }
+  const entranceRight = {
+    x: GAME_SHELTER.position.x + GAME_SHELTER.body.width * GAME_SHELTER.scale,
+    y: postBottom,
+  }
+  const entranceTop = {
+    x: GAME_SHELTER.position.x,
+    y: postTop,
+  }
+
+  return (
+    distanceToSegment(point, entranceLeft, entranceTop) <= hitRadius ||
+    distanceToSegment(point, entranceRight, entranceTop) <= hitRadius
+  )
+}
+
+function segmentBand(start: Point, end: Point, halfWidth: number): CollisionTriangle[] {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const length = Math.hypot(dx, dy)
+  if (length === 0) return []
+
+  const offsetX = (-dy / length) * halfWidth
+  const offsetY = (dx / length) * halfWidth
+  const a = { x: start.x + offsetX, y: start.y + offsetY }
+  const b = { x: end.x + offsetX, y: end.y + offsetY }
+  const c = { x: end.x - offsetX, y: end.y - offsetY }
+  const d = { x: start.x - offsetX, y: start.y - offsetY }
+
+  return [
+    { a, b, c },
+    { a, b: c, c: d },
+  ]
+}
+
+function rectTriangles(minX: number, minY: number, maxX: number, maxY: number): CollisionTriangle[] {
+  const a = { x: minX, y: minY }
+  const b = { x: maxX, y: minY }
+  const c = { x: maxX, y: maxY }
+  const d = { x: minX, y: maxY }
+
+  return [
+    { a, b, c },
+    { a, b: c, c: d },
+  ]
+}
+
+function shelterSilhouetteTriangles() {
+  const roofLeft = toWorldPoint(COLLISION_ROOF.left)
+  const roofRight = toWorldPoint(COLLISION_ROOF.right)
+  const roofPeak = toWorldPoint(COLLISION_ROOF.peak)
+  const postBottom = GAME_SHELTER.position.y
+  const postTop = GAME_SHELTER.position.y + COLLISION_POST_HEIGHT * GAME_SHELTER.scale
+  const postHalfWidth = (GAME_SHELTER.body.width * GAME_SHELTER.scale) / 2
+  const entranceLeft = {
+    x: GAME_SHELTER.position.x - GAME_SHELTER.body.width * GAME_SHELTER.scale,
+    y: postBottom,
+  }
+  const entranceRight = {
+    x: GAME_SHELTER.position.x + GAME_SHELTER.body.width * GAME_SHELTER.scale,
+    y: postBottom,
+  }
+  const entranceTop = {
+    x: GAME_SHELTER.position.x,
+    y: postTop,
+  }
+  return [
+    ...segmentBand(roofLeft, roofPeak, ROOF_COLLISION_HALF_WIDTH),
+    ...segmentBand(roofRight, roofPeak, ROOF_COLLISION_HALF_WIDTH),
+    ...segmentBand(entranceLeft, entranceTop, BRACE_COLLISION_HALF_WIDTH),
+    ...segmentBand(entranceRight, entranceTop, BRACE_COLLISION_HALF_WIDTH),
+    ...rectTriangles(
+      GAME_SHELTER.position.x - postHalfWidth,
+      postBottom,
+      GAME_SHELTER.position.x + postHalfWidth,
+      postTop,
+    ),
+  ]
+}
+
 function createHazard(id: number, bounds: { x: number; y: number }): Hazard {
   const radius = randomBetween(0.16, 0.27)
   let x = 0
@@ -179,6 +302,8 @@ function prepareHazardObject(object: Object3D) {
   object.renderOrder = HAZARD_RENDER_ORDER + 1
 
   if ('material' in object) {
+    object.userData.hazardCollisionMesh = true
+
     const materialObject = object as MaterialObject
     const materials = Array.isArray(materialObject.material) ? materialObject.material : [materialObject.material]
     materials.forEach((material) => {
@@ -262,7 +387,7 @@ function HazardModel({ kind, radius, templates }: { kind: HazardKind; radius: nu
     const clone = templates[kind].clone(true)
     clone.traverse(prepareHazardObject)
     return clone
-  }, [kind, radius, templates])
+  }, [kind, templates])
 
   return (
     <group scale={radius * 1.9} rotation={HAZARD_MODEL_ROTATIONS[kind]}>
@@ -283,6 +408,28 @@ function UmbrellaModel({ radius, template }: { radius: number; template: Group }
       <primitive object={model} />
     </group>
   )
+}
+
+function hazardTouchesShelter(group: Group | undefined, hazard: Hazard) {
+  const touchesSilhouette = circleTouchesShelterSilhouette(hazard, hazard.radius)
+  if (!touchesSilhouette && !circleTouchesShelter(hazard, hazard.radius)) return false
+  if (!group || getShelterCollisionTriangles().length === 0) return true
+
+  const itemTriangles = trianglesFromObject(
+    group,
+    0.00002,
+    (object) => object.userData.hazardCollisionMesh === true,
+  )
+
+  return (
+    trianglesTouchShelterMesh(itemTriangles) ||
+    trianglesIntersectTriangleSet(itemTriangles, shelterSilhouetteTriangles()) ||
+    (itemTriangles.length === 0 && touchesSilhouette)
+  )
+}
+
+function hazardTouchesShield(hazard: Hazard) {
+  return Math.hypot(hazard.x - SHIELD_CENTER.x, hazard.y - SHIELD_CENTER.y) <= SHIELD_RADIUS + hazard.radius * 0.72
 }
 
 function StormBurstEffect({ blastId }: { blastId: number }) {
@@ -351,21 +498,25 @@ function ShelterShield({ active }: { active: boolean }) {
 
     if (shield.current) {
       shield.current.visible = active
-      shield.current.scale.set(1.0 + pulse * 0.025, 1.12 + pulse * 0.03, 1)
+      shield.current.scale.setScalar(1.0 + pulse * 0.025)
       const material = shield.current.material as Material & { opacity: number }
-      material.opacity = active ? 0.08 + pulse * 0.025 : 0
+      material.opacity = active ? 0.1 + pulse * 0.025 : 0
     }
 
     if (ring.current) {
       ring.current.visible = active
-      ring.current.scale.set(1.03 + pulse * 0.035, 1.15 + pulse * 0.04, 1)
+      ring.current.scale.setScalar(1.0 + pulse * 0.035)
       const material = ring.current.material as Material & { opacity: number }
       material.opacity = active ? 0.32 + pulse * 0.1 : 0
     }
   })
 
   return (
-    <group position={[GAME_SHELTER.position.x, GAME_SHELTER.position.y + 0.38, 0.06]} renderOrder={HAZARD_RENDER_ORDER + 4}>
+    <group
+      position={[SHIELD_CENTER.x, SHIELD_CENTER.y, SHELTER_VISUAL_LAYER_Z]}
+      scale={SHIELD_RADIUS}
+      renderOrder={HAZARD_RENDER_ORDER + 4}
+    >
       <mesh ref={shield} visible={false} renderOrder={HAZARD_RENDER_ORDER + 4}>
         <circleGeometry args={[1, 64]} />
         <meshBasicMaterial
@@ -564,7 +715,19 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
         hazard.vy *= -1
       }
 
-      if (circleTouchesShelter(hazard, hazard.radius)) {
+      const group = hazardGroups.current.get(hazard.id)
+      if (group) {
+        group.position.set(hazard.x, hazard.y, 0)
+        group.rotation.x += hazard.spin * delta
+        group.rotation.y += (hazard.spin * 0.73 + 0.4) * delta
+      }
+
+      if (shieldActiveRef.current && hazardTouchesShield(hazard)) {
+        changedHazards = true
+        continue
+      }
+
+      if (hazardTouchesShelter(group, hazard)) {
         if (shieldActiveRef.current) {
           changedHazards = true
           continue
@@ -573,13 +736,6 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
         hasLost.current = true
         onLose()
         return
-      }
-
-      const group = hazardGroups.current.get(hazard.id)
-      if (group) {
-        group.position.set(hazard.x, hazard.y, 0)
-        group.rotation.x += hazard.spin * delta
-        group.rotation.y += (hazard.spin * 0.73 + 0.4) * delta
       }
 
       nextHazards.push(hazard)
@@ -600,7 +756,7 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
   })
 
   return (
-    <group position={[0, 0, 0.38]} renderOrder={HAZARD_RENDER_ORDER}>
+    <group position={[0, 0, HAZARD_LAYER_Z]} renderOrder={HAZARD_RENDER_ORDER}>
       <ShelterShield active={shieldActive} />
       <StormBurstEffect blastId={blastId} />
       {umbrellaBonus && (

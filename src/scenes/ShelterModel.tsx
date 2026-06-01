@@ -4,6 +4,11 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { Group, Object3D } from 'three';
 import { MathUtils, MeshStandardMaterial } from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import {
+  clearShelterCollisionTriangles,
+  setShelterCollisionTriangles,
+  trianglesFromObject,
+} from '../collision/shelterCollision';
 import { GAME_SHELTER } from '../config/shelter';
 import type { GamePhase } from '../types/game';
 import { Campfire } from './Campfire';
@@ -62,9 +67,18 @@ export function ShelterModel({ phase, onReady }: ShelterModelProps) {
           material.roughness = Math.min(material.roughness, 0.72);
           material.needsUpdate = true;
         });
+        object.userData.shelterCollisionMesh = true;
       }
     });
   }, [hasStarted, scene]);
+
+  useEffect(() => {
+    if (!hasStarted) clearShelterCollisionTriangles();
+  }, [hasStarted]);
+
+  useEffect(() => {
+    return () => clearShelterCollisionTriangles();
+  }, []);
 
   useFrame((_, delta) => {
     if (!group.current) return;
@@ -82,6 +96,16 @@ export function ShelterModel({ phase, onReady }: ShelterModelProps) {
 
     const nextScale = MathUtils.damp(group.current.scale.x, targetScale, smoothness, delta);
     group.current.scale.setScalar(nextScale);
+
+    if (hasStarted) {
+      setShelterCollisionTriangles(
+        trianglesFromObject(
+          group.current,
+          0.00004,
+          (object) => object.userData.shelterCollisionMesh === true,
+        ),
+      );
+    }
   });
 
   return (

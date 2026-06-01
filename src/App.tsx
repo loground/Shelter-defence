@@ -27,6 +27,7 @@ function App() {
   const [stats, setStats] = useState<GameStats>(initialStats);
   const [blastId, setBlastId] = useState(0);
   const [hasStormBurst, setHasStormBurst] = useState(true);
+  const [showIntro, setShowIntro] = useState(true);
   const [audioChoice, setAudioChoice] = useState<'sound' | 'muted' | null>(() => getSavedAudioChoice());
   const [isMuted, setIsMuted] = useState(() => getSavedAudioChoice() === 'muted');
   const mainMusic = useRef<HTMLAudioElement | null>(null);
@@ -156,8 +157,11 @@ function App() {
         stats={stats}
         hasStormBurst={hasStormBurst}
         isMuted={isMuted}
+        showIntro={showIntro}
         needsAudioChoice={!audioChoice}
         onChooseAudio={chooseAudio}
+        onDismissIntro={() => setShowIntro(false)}
+        onOpenIntro={() => setShowIntro(true)}
         onToggleMute={() => setIsMuted((currentMuted) => !currentMuted)}
         onPlay={startGame}
         onRestart={restartGame}

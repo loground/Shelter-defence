@@ -170,6 +170,17 @@ export function trianglesTouchShelterMesh(itemTriangles: CollisionTriangle[]) {
   })
 }
 
+export function trianglesIntersectTriangleSet(aTriangles: CollisionTriangle[], bTriangles: CollisionTriangle[]) {
+  return aTriangles.some((aTriangle) => {
+    const aBounds = triangleBounds(aTriangle)
+
+    return bTriangles.some((bTriangle) => {
+      if (!boundsOverlap(aBounds, triangleBounds(bTriangle))) return false
+      return trianglesIntersect(aTriangle, bTriangle)
+    })
+  })
+}
+
 export function circleTouchesShelterMesh(point: CollisionPoint, radius: number) {
   return shelterTriangles.some((triangle) => {
     if (pointInTriangle(point, triangle)) return true
