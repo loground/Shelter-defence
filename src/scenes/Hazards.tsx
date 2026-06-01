@@ -36,6 +36,15 @@ type UmbrellaBonus = {
   y: number
 }
 
+type FlareBonus = UmbrellaBonus
+
+type LaserShot = {
+  id: number
+  age: number
+  start: Point
+  end: Point
+}
+
 type HazardsProps = {
   active: boolean
   blastId: number
@@ -55,6 +64,9 @@ const UMBRELLA_LIFETIME = 3
 const SHIELD_DURATION = 7
 const SHIELD_CENTER = { x: GAME_SHELTER.position.x, y: GAME_SHELTER.position.y + 0.42 }
 const SHIELD_RADIUS = 1.071
+const FLARE_LIFETIME = 4.5
+const LASER_LIFETIME = 0.36
+const LASER_ORIGIN = { x: GAME_SHELTER.position.x, y: GAME_SHELTER.position.y + 0.62 }
 const ROOF_COLLISION_HALF_WIDTH = 0.045
 const BRACE_COLLISION_HALF_WIDTH = 0.034
 const COLLISION_ROOF = {
@@ -410,6 +422,89 @@ function UmbrellaModel({ radius, template }: { radius: number; template: Group }
   )
 }
 
+function FlareGunPickup({ bonus }: { bonus: FlareBonus }) {
+  return (
+    <group position={[bonus.x, bonus.y, 0]} rotation={[0, 0, -0.6]} renderOrder={HAZARD_RENDER_ORDER + 3}>
+      <mesh scale={bonus.radius * 2.45} renderOrder={HAZARD_RENDER_ORDER + 2}>
+        <sphereGeometry args={[1, 24, 14]} />
+        <meshBasicMaterial
+          color="#ff7b45"
+          transparent
+          opacity={0.22}
+          depthTest={false}
+          depthWrite={false}
+          blending={AdditiveBlending}
+        />
+      </mesh>
+      <mesh scale={bonus.radius * 2.85} renderOrder={HAZARD_RENDER_ORDER + 2}>
+        <ringGeometry args={[0.92, 1, 56]} />
+        <meshBasicMaterial
+          color="#ffd28a"
+          transparent
+          opacity={0.64}
+          depthTest={false}
+          depthWrite={false}
+          blending={AdditiveBlending}
+        />
+      </mesh>
+      <mesh position={[bonus.radius * 0.1, 0, 0.03]} rotation={[0, 0, Math.PI / 2]} renderOrder={HAZARD_RENDER_ORDER + 3}>
+        <cylinderGeometry args={[bonus.radius * 0.19, bonus.radius * 0.24, bonus.radius * 1.55, 16]} />
+        <meshBasicMaterial color="#ffdf8e" depthTest={false} depthWrite={false} />
+      </mesh>
+      <mesh position={[-bonus.radius * 0.35, -bonus.radius * 0.32, 0.04]} rotation={[0, 0, -0.5]} renderOrder={HAZARD_RENDER_ORDER + 3}>
+        <boxGeometry args={[bonus.radius * 0.28, bonus.radius * 0.72, bonus.radius * 0.18]} />
+        <meshBasicMaterial color="#c8462d" depthTest={false} depthWrite={false} />
+      </mesh>
+      <mesh position={[bonus.radius * 0.92, 0, 0.05]} renderOrder={HAZARD_RENDER_ORDER + 4}>
+        <sphereGeometry args={[bonus.radius * 0.17, 16, 10]} />
+        <meshBasicMaterial
+          color="#fff6b8"
+          transparent
+          opacity={0.95}
+          depthTest={false}
+          depthWrite={false}
+          blending={AdditiveBlending}
+        />
+      </mesh>
+    </group>
+  )
+}
+
+function LaserShotBeam({ shot }: { shot: LaserShot }) {
+  const dx = shot.end.x - shot.start.x
+  const dy = shot.end.y - shot.start.y
+  const length = Math.hypot(dx, dy)
+  const angle = Math.atan2(dy, dx)
+  const opacity = Math.max(0, 1 - shot.age / LASER_LIFETIME)
+
+  return (
+    <group position={[(shot.start.x + shot.end.x) / 2, (shot.start.y + shot.end.y) / 2, 0.34]} rotation={[0, 0, angle - Math.PI / 2]} renderOrder={HAZARD_RENDER_ORDER + 8}>
+      <mesh renderOrder={HAZARD_RENDER_ORDER + 8}>
+        <cylinderGeometry args={[0.018, 0.018, length, 14]} />
+        <meshBasicMaterial
+          color="#fff2a8"
+          transparent
+          opacity={opacity}
+          depthTest={false}
+          depthWrite={false}
+          blending={AdditiveBlending}
+        />
+      </mesh>
+      <mesh scale={[1.9, 1.9, 1.9]} renderOrder={HAZARD_RENDER_ORDER + 7}>
+        <cylinderGeometry args={[0.035, 0.035, length, 14]} />
+        <meshBasicMaterial
+          color="#ff4538"
+          transparent
+          opacity={opacity * 0.28}
+          depthTest={false}
+          depthWrite={false}
+          blending={AdditiveBlending}
+        />
+      </mesh>
+    </group>
+  )
+}
+
 function hazardTouchesShelter(group: Group | undefined, hazard: Hazard) {
   const touchesSilhouette = circleTouchesShelterSilhouette(hazard, hazard.radius)
   if (!touchesSilhouette && !circleTouchesShelter(hazard, hazard.radius)) return false
@@ -430,6 +525,19 @@ function hazardTouchesShelter(group: Group | undefined, hazard: Hazard) {
 
 function hazardTouchesShield(hazard: Hazard) {
   return Math.hypot(hazard.x - SHIELD_CENTER.x, hazard.y - SHIELD_CENTER.y) <= SHIELD_RADIUS + hazard.radius * 0.72
+}
+
+function chooseRandomHazards(hazards: Hazard[], count: number) {
+  const pool = [...hazards]
+  const chosen: Hazard[] = []
+
+  while (pool.length > 0 && chosen.length < count) {
+    const index = Math.floor(Math.random() * pool.length)
+    const [hazard] = pool.splice(index, 1)
+    chosen.push(hazard)
+  }
+
+  return chosen
 }
 
 function StormBurstEffect({ blastId }: { blastId: number }) {
@@ -547,20 +655,28 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
   const { pointer, viewport } = useThree()
   const [hazards, setHazards] = useState<Hazard[]>([])
   const [umbrellaBonus, setUmbrellaBonus] = useState<UmbrellaBonus | null>(null)
+  const [flareBonus, setFlareBonus] = useState<FlareBonus | null>(null)
+  const [laserShots, setLaserShots] = useState<LaserShot[]>([])
   const [shieldActive, setShieldActive] = useState(false)
   const hazardsRef = useRef<Hazard[]>([])
   const umbrellaBonusRef = useRef<UmbrellaBonus | null>(null)
+  const flareBonusRef = useRef<FlareBonus | null>(null)
+  const laserShotsRef = useRef<LaserShot[]>([])
   const hazardGroups = useRef(new Map<number, Group>())
   const umbrellaGroup = useRef<Group>(null)
+  const flareGroup = useRef<Group>(null)
   const nextId = useRef(1)
   const nextBonusId = useRef(1)
+  const nextLaserId = useRef(1)
   const elapsed = useRef(0)
   const spawnTimer = useRef(0)
   const bonusSpawnTimer = useRef(0)
+  const flareSpawnTimer = useRef(0)
   const statsTimer = useRef(0)
   const hasLost = useRef(false)
   const shieldUntil = useRef(0)
   const shieldActiveRef = useRef(false)
+  const flarePower = useRef(0)
   const extendLoader = useHazardLoader()
   const hazardTemplates = useHazardTemplates(extendLoader)
   const umbrellaTemplate = useUmbrellaTemplate(extendLoader)
@@ -574,23 +690,38 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
   }, [umbrellaBonus])
 
   useEffect(() => {
+    flareBonusRef.current = flareBonus
+  }, [flareBonus])
+
+  useEffect(() => {
+    laserShotsRef.current = laserShots
+  }, [laserShots])
+
+  useEffect(() => {
     shieldActiveRef.current = shieldActive
   }, [shieldActive])
 
   useEffect(() => {
     hazardsRef.current = []
     umbrellaBonusRef.current = null
+    flareBonusRef.current = null
+    laserShotsRef.current = []
     setHazards([])
     setUmbrellaBonus(null)
+    setFlareBonus(null)
+    setLaserShots([])
     setShieldActive(false)
     nextId.current = 1
     nextBonusId.current = 1
+    nextLaserId.current = 1
     elapsed.current = 0
     spawnTimer.current = 1.1
     bonusSpawnTimer.current = randomBetween(8, 13)
+    flareSpawnTimer.current = randomBetween(12, 18)
     statsTimer.current = 0
     hasLost.current = false
     shieldUntil.current = 0
+    flarePower.current = 0
     onStatsChange({ elapsedSeconds: 0, hazardCount: 0 })
   }, [onStatsChange])
 
@@ -599,11 +730,16 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
 
     hazardsRef.current = []
     umbrellaBonusRef.current = null
+    flareBonusRef.current = null
+    laserShotsRef.current = []
     setHazards([])
     setUmbrellaBonus(null)
+    setFlareBonus(null)
+    setLaserShots([])
     nextId.current = 1
     spawnTimer.current = 0.7
     bonusSpawnTimer.current = randomBetween(8, 13)
+    flareSpawnTimer.current = randomBetween(12, 18)
     statsTimer.current = 0
     onStatsChange({
       elapsedSeconds: Math.floor(elapsed.current),
@@ -618,7 +754,16 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
     elapsed.current += delta
     spawnTimer.current -= delta
     bonusSpawnTimer.current -= delta
+    flareSpawnTimer.current -= delta
     statsTimer.current -= delta
+
+    if (laserShotsRef.current.length > 0) {
+      const nextLaserShots = laserShotsRef.current
+        .map((shot) => ({ ...shot, age: shot.age + delta }))
+        .filter((shot) => shot.age < LASER_LIFETIME)
+      laserShotsRef.current = nextLaserShots
+      setLaserShots(nextLaserShots)
+    }
 
     const bounds = {
       x: viewport.width / 2 - 0.26,
@@ -660,6 +805,21 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
       bonusSpawnTimer.current = randomBetween(11, 17)
     }
 
+    if (!flareBonusRef.current && flareSpawnTimer.current <= 0) {
+      const bonus = {
+        id: nextBonusId.current,
+        age: 0,
+        radius: 0.25,
+        x: randomBetween(-bounds.x * 0.74, bounds.x * 0.74),
+        y: randomBetween(-bounds.y * 0.16, bounds.y * 0.76),
+      }
+
+      nextBonusId.current += 1
+      flareBonusRef.current = bonus
+      setFlareBonus(bonus)
+      flareSpawnTimer.current = randomBetween(14, 22)
+    }
+
     const bonus = umbrellaBonusRef.current
     if (bonus) {
       bonus.age += delta
@@ -678,6 +838,44 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
         umbrellaGroup.current.position.set(bonus.x, bonus.y, 0)
         umbrellaGroup.current.rotation.z += delta * 0.65
         umbrellaGroup.current.rotation.y += delta * 0.9
+      }
+    }
+
+    const flare = flareBonusRef.current
+    if (flare) {
+      flare.age += delta
+
+      const flareDistance = Math.hypot(flare.x - mouse.x, flare.y - mouse.y)
+      if (flareDistance <= flare.radius + 0.22) {
+        flareBonusRef.current = null
+        setFlareBonus(null)
+        flarePower.current += 1
+
+        const targets = chooseRandomHazards(hazardsRef.current, flarePower.current)
+        const targetIds = new Set(targets.map((target) => target.id))
+        const shots = targets.map((target) => ({
+          id: nextLaserId.current++,
+          age: 0,
+          start: LASER_ORIGIN,
+          end: { x: target.x, y: target.y },
+        }))
+
+        if (shots.length > 0) {
+          laserShotsRef.current = [...laserShotsRef.current, ...shots]
+          setLaserShots(laserShotsRef.current)
+          hazardsRef.current = hazardsRef.current.filter((hazard) => !targetIds.has(hazard.id))
+          setHazards(hazardsRef.current)
+          onStatsChange({
+            elapsedSeconds: Math.floor(elapsed.current),
+            hazardCount: hazardsRef.current.length,
+          })
+        }
+      } else if (flare.age >= FLARE_LIFETIME) {
+        flareBonusRef.current = null
+        setFlareBonus(null)
+      } else if (flareGroup.current) {
+        flareGroup.current.position.set(flare.x, flare.y, 0)
+        flareGroup.current.rotation.z += delta * 1.4
       }
     }
 
@@ -759,6 +957,9 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
     <group position={[0, 0, HAZARD_LAYER_Z]} renderOrder={HAZARD_RENDER_ORDER}>
       <ShelterShield active={shieldActive} />
       <StormBurstEffect blastId={blastId} />
+      {laserShots.map((shot) => (
+        <LaserShotBeam key={shot.id} shot={shot} />
+      ))}
       {umbrellaBonus && (
         <group ref={umbrellaGroup} position={[umbrellaBonus.x, umbrellaBonus.y, 0]} renderOrder={HAZARD_RENDER_ORDER + 3}>
           <mesh scale={umbrellaBonus.radius * 2.2} renderOrder={HAZARD_RENDER_ORDER + 2}>
@@ -784,6 +985,11 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
             />
           </mesh>
           <UmbrellaModel radius={umbrellaBonus.radius} template={umbrellaTemplate} />
+        </group>
+      )}
+      {flareBonus && (
+        <group ref={flareGroup} position={[flareBonus.x, flareBonus.y, 0]} renderOrder={HAZARD_RENDER_ORDER + 3}>
+          <FlareGunPickup bonus={{ ...flareBonus, x: 0, y: 0 }} />
         </group>
       )}
       {hazards.map((hazard) => (

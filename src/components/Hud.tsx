@@ -105,6 +105,7 @@ export function Hud({
             <p>Move your mouse near approaching items to push them away before they hit the shelter.</p>
             <p>Press N once per game to clear every item on screen when the storm gets crowded.</p>
             <p>Collect glowing umbrellas with your mouse to shield the shelter for a few seconds. While the shield is active, items that touch the shelter are cleared.</p>
+            <p>Pick up flare guns to fire lasers from the shelter at random hazards. The first flare destroys one hazard, the second destroys two, and each later flare gets stronger.</p>
             <p>The storm builds over time, so keep moving and protect the center.</p>
           </div>
           <div className="intro-actions">
