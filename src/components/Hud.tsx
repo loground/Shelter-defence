@@ -102,11 +102,16 @@ export function Hud({
           <p className="intro-kicker">Storm briefing</p>
           <h2 id="game-intro-title">Save the shelter from the storm</h2>
           <div className="intro-copy">
-            <p>Move your mouse near approaching items to push them away before they hit the shelter.</p>
-            <p>Press N once per game to clear every item on screen when the storm gets crowded.</p>
-            <p>Collect glowing umbrellas with your mouse to shield the shelter for a few seconds. While the shield is active, items that touch the shelter are cleared.</p>
-            <p>Pick up flare guns to fire lasers from the shelter at random hazards. The first flare destroys one hazard, the second destroys two, and each later flare gets stronger.</p>
-            <p>The storm builds over time, so keep moving and protect the center.</p>
+            <p>Move your mouse near falling junk to push it away from the shelter.</p>
+            <p>Survive as long as you can. The storm gets stronger over time.</p>
+            <div className="intro-powers" aria-label="Superpowers">
+              <p>Superpowers</p>
+              <ul>
+                <li><strong>N Burst:</strong> press N once per game to clear the screen.</li>
+                <li><strong>Umbrella:</strong> pick it up for a short shield.</li>
+                <li><strong>Flare Gun:</strong> pick it up to laser random hazards. Each pickup hits one more target.</li>
+              </ul>
+            </div>
           </div>
           <div className="intro-actions">
             {needsAudioChoice ? (
