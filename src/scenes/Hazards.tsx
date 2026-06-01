@@ -13,6 +13,7 @@ import {
 } from '../collision/shelterCollision'
 import { GAME_SHELTER } from '../config/shelter'
 import type { GameStats } from '../types/game'
+import { HAND_INPUT_SCALE, type HandPoint, type InputMode } from '../types/input'
 
 type HazardKind = 'bottle' | 'can' | 'rock' | 'stick'
 
@@ -48,6 +49,8 @@ type LaserShot = {
 type HazardsProps = {
   active: boolean
   blastId: number
+  inputMode: InputMode
+  handPoints: HandPoint[]
   onLose: () => void
   onStatsChange: (stats: GameStats) => void
 }
@@ -651,7 +654,7 @@ function ShelterShield({ active }: { active: boolean }) {
   )
 }
 
-export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps) {
+export function Hazards({ active, blastId, inputMode, handPoints, onLose, onStatsChange }: HazardsProps) {
   const { pointer, viewport } = useThree()
   const [hazards, setHazards] = useState<Hazard[]>([])
   const [umbrellaBonus, setUmbrellaBonus] = useState<UmbrellaBonus | null>(null)
@@ -780,10 +783,17 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
       spawnTimer.current = spawnInterval
     }
 
-    const mouse = {
+    const mousePoint = {
       x: pointer.x * viewport.width * 0.5,
       y: pointer.y * viewport.height * 0.5,
     }
+    const repelPoints =
+      inputMode === 'hands' && handPoints.length > 0
+        ? handPoints.map((point) => ({
+            x: (point.x - 0.5) * viewport.width * HAND_INPUT_SCALE,
+            y: (0.5 - point.y) * viewport.height * HAND_INPUT_SCALE,
+          }))
+        : [mousePoint]
 
     if (shieldActiveRef.current && elapsed.current >= shieldUntil.current) {
       shieldActiveRef.current = false
@@ -824,7 +834,9 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
     if (bonus) {
       bonus.age += delta
 
-      const bonusDistance = Math.hypot(bonus.x - mouse.x, bonus.y - mouse.y)
+      const bonusDistance = Math.min(
+        ...repelPoints.map((point) => Math.hypot(bonus.x - point.x, bonus.y - point.y)),
+      )
       if (bonusDistance <= bonus.radius + 0.22) {
         umbrellaBonusRef.current = null
         setUmbrellaBonus(null)
@@ -845,7 +857,9 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
     if (flare) {
       flare.age += delta
 
-      const flareDistance = Math.hypot(flare.x - mouse.x, flare.y - mouse.y)
+      const flareDistance = Math.min(
+        ...repelPoints.map((point) => Math.hypot(flare.x - point.x, flare.y - point.y)),
+      )
       if (flareDistance <= flare.radius + 0.22) {
         flareBonusRef.current = null
         setFlareBonus(null)
@@ -883,9 +897,21 @@ export function Hazards({ active, blastId, onLose, onStatsChange }: HazardsProps
     const nextHazards: Hazard[] = []
 
     for (const hazard of hazardsRef.current) {
-      const dx = hazard.x - mouse.x
-      const dy = hazard.y - mouse.y
-      const distance = Math.hypot(dx, dy)
+      let dx = 0
+      let dy = 0
+      let distance = Number.POSITIVE_INFINITY
+
+      for (const point of repelPoints) {
+        const pointDx = hazard.x - point.x
+        const pointDy = hazard.y - point.y
+        const pointDistance = Math.hypot(pointDx, pointDy)
+
+        if (pointDistance < distance) {
+          dx = pointDx
+          dy = pointDy
+          distance = pointDistance
+        }
+      }
 
       if (distance > 0.001 && distance < REPEL_RADIUS) {
         const force = (1 - distance / REPEL_RADIUS) * REPEL_FORCE

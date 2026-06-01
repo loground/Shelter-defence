@@ -16,6 +16,14 @@
   display: block;
 }
 
+.hand-video {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .shell::before {
   position: absolute;
   inset: 0;
@@ -77,7 +85,8 @@
 }
 
 .audio-choice,
-.game-intro {
+.game-intro,
+.hand-setup {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -142,13 +151,58 @@
   text-align: left;
 }
 
-.game-intro h2 {
+.hand-setup {
+  z-index: 5;
+  width: min(calc(100vw - 2rem), 28rem);
+  text-align: left;
+}
+
+.game-intro h2,
+.hand-setup h2 {
   margin: 0;
   color: #fff5df;
   font-size: clamp(1.65rem, 4vw, 2.8rem);
   line-height: 0.98;
   letter-spacing: 0;
   text-transform: uppercase;
+}
+
+.hand-setup > p:not(.intro-kicker) {
+  margin: 0;
+  color: #eadac2;
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.hand-setup-error {
+  color: #ffb7a7 !important;
+}
+
+.hand-setup-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.hand-setup-actions button {
+  min-height: 3rem;
+  border: 1px solid rgba(247, 239, 226, 0.56);
+  border-radius: 8px;
+  color: #f9f1e6;
+  background: rgba(9, 17, 18, 0.7);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.hand-setup-actions button:disabled {
+  color: rgba(234, 218, 194, 0.42);
+  border-color: rgba(247, 239, 226, 0.18);
+  cursor: wait;
 }
 
 .intro-copy {
@@ -290,11 +344,55 @@ h1 {
   border-left: 0.66rem solid currentColor;
 }
 
+.launch-controls {
+  display: grid;
+  gap: 0.9rem;
+  pointer-events: auto;
+}
+
 .launch-actions {
   display: flex;
   align-items: center;
   gap: 0.8rem;
-  pointer-events: auto;
+}
+
+.input-selector {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 19rem);
+  border: 1px solid rgba(247, 239, 226, 0.28);
+  border-radius: 8px;
+  padding: 0.25rem;
+  background: rgba(5, 12, 13, 0.58);
+  box-shadow:
+    0 14px 42px rgba(0, 0, 0, 0.26),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+}
+
+.input-selector button {
+  min-height: 2.55rem;
+  border: 0;
+  border-radius: 6px;
+  color: rgba(249, 241, 230, 0.64);
+  background: transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.input-selector button[aria-checked="true"] {
+  color: #fff1bd;
+  background: rgba(230, 181, 94, 0.18);
+  box-shadow: inset 0 0 18px rgba(255, 178, 82, 0.1);
+}
+
+.input-selector button:focus-visible {
+  outline: 3px solid rgba(230, 181, 94, 0.5);
+  outline-offset: 2px;
 }
 
 .faq-button {
@@ -446,6 +544,11 @@ h1 {
   .launch-actions {
     width: 100%;
     align-items: stretch;
+  }
+
+  .launch-controls,
+  .input-selector {
+    width: 100%;
   }
 
   .launch-actions .play-button {

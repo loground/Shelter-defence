@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameCanvas } from './components/GameCanvas';
+import { HandTracker } from './components/HandTracker';
 import { Hud } from './components/Hud';
+import type { HandPoint, InputMode } from './types/input';
 import type { GamePhase, GameStats } from './types/game';
 import './App.css';
 
@@ -28,6 +30,11 @@ function App() {
   const [blastId, setBlastId] = useState(0);
   const [hasStormBurst, setHasStormBurst] = useState(true);
   const [showIntro, setShowIntro] = useState(true);
+  const [inputMode, setInputMode] = useState<InputMode>('mouse');
+  const [handPoints, setHandPoints] = useState<HandPoint[]>([]);
+  const [needsHandSetup, setNeedsHandSetup] = useState(false);
+  const [isHandCameraReady, setIsHandCameraReady] = useState(false);
+  const [handCameraError, setHandCameraError] = useState(false);
   const [audioChoice, setAudioChoice] = useState<'sound' | 'muted' | null>(() => getSavedAudioChoice());
   const [isMuted, setIsMuted] = useState(() => getSavedAudioChoice() === 'muted');
   const mainMusic = useRef<HTMLAudioElement | null>(null);
@@ -130,6 +137,13 @@ function App() {
   }, [hasStormBurst, isMuted, phase]);
 
   function startGame() {
+    if (inputMode === 'hands' && !isHandCameraReady) {
+      setShowIntro(false);
+      setNeedsHandSetup(true);
+      setHandCameraError(false);
+      return;
+    }
+
     setStats(initialStats);
     setRunId((currentRunId) => currentRunId + 1);
     setBlastId(0);
@@ -142,6 +156,21 @@ function App() {
     setStats(initialStats);
   }
 
+  function startHandsGame() {
+    setNeedsHandSetup(false);
+    startGame();
+  }
+
+  const handleHandReady = useCallback(() => {
+    setIsHandCameraReady(true);
+    setHandCameraError(false);
+  }, []);
+
+  const handleHandError = useCallback(() => {
+    setIsHandCameraReady(false);
+    setHandCameraError(true);
+  }, []);
+
   return (
     <main
       className={`shell ${isLaunch ? 'is-launch' : 'is-playing'} ${phase === 'lost' ? 'is-lost' : ''}`}>
@@ -149,19 +178,42 @@ function App() {
         phase={phase}
         runId={runId}
         blastId={blastId}
+        inputMode={inputMode}
+        handPoints={handPoints}
         onLose={() => setPhase('lost')}
         onStatsChange={setStats}
+      />
+      <HandTracker
+        active={inputMode === 'hands' && (phase === 'playing' || needsHandSetup)}
+        onHandPoints={setHandPoints}
+        onReady={handleHandReady}
+        onError={handleHandError}
       />
       <Hud
         phase={phase}
         stats={stats}
         hasStormBurst={hasStormBurst}
         isMuted={isMuted}
+        inputMode={inputMode}
+        needsHandSetup={needsHandSetup}
+        isHandCameraReady={isHandCameraReady}
+        handCameraError={handCameraError}
         showIntro={showIntro}
         needsAudioChoice={!audioChoice}
         onChooseAudio={chooseAudio}
         onDismissIntro={() => setShowIntro(false)}
         onOpenIntro={() => setShowIntro(true)}
+        onInputModeChange={(mode) => {
+          setInputMode(mode);
+          if (mode === 'mouse') {
+            setNeedsHandSetup(false);
+            setIsHandCameraReady(false);
+            setHandCameraError(false);
+            setHandPoints([]);
+          }
+        }}
+        onStartHandsGame={startHandsGame}
+        onCancelHandSetup={() => setNeedsHandSetup(false)}
         onToggleMute={() => setIsMuted((currentMuted) => !currentMuted)}
         onPlay={startGame}
         onRestart={restartGame}

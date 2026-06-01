@@ -1,15 +1,23 @@
 import type { GamePhase, GameStats } from '../types/game'
+import type { InputMode } from '../types/input'
 
 type HudProps = {
   phase: GamePhase
   stats: GameStats
   hasStormBurst: boolean
   isMuted: boolean
+  inputMode: InputMode
+  needsHandSetup: boolean
+  isHandCameraReady: boolean
+  handCameraError: boolean
   showIntro: boolean
   needsAudioChoice: boolean
   onChooseAudio: (choice: 'sound' | 'muted') => void
   onDismissIntro: () => void
   onOpenIntro: () => void
+  onInputModeChange: (mode: InputMode) => void
+  onStartHandsGame: () => void
+  onCancelHandSetup: () => void
   onToggleMute: () => void
   onPlay: () => void
   onRestart: () => void
@@ -26,11 +34,18 @@ export function Hud({
   stats,
   hasStormBurst,
   isMuted,
+  inputMode,
+  needsHandSetup,
+  isHandCameraReady,
+  handCameraError,
   showIntro,
   needsAudioChoice,
   onChooseAudio,
   onDismissIntro,
   onOpenIntro,
+  onInputModeChange,
+  onStartHandsGame,
+  onCancelHandSetup,
   onToggleMute,
   onPlay,
   onRestart,
@@ -52,14 +67,34 @@ export function Hud({
       </div>
 
       {isLaunch ? (
-        <div className="launch-actions">
-          <button className="play-button" type="button" onClick={onPlay}>
-            <span className="play-icon" aria-hidden="true" />
-            Play
-          </button>
-          <button className="faq-button" type="button" onClick={onOpenIntro}>
-            FAQ
-          </button>
+        <div className="launch-controls">
+          <div className="input-selector" role="radiogroup" aria-label="Control mode">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={inputMode === 'mouse'}
+              onClick={() => onInputModeChange('mouse')}
+            >
+              Mouse
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={inputMode === 'hands'}
+              onClick={() => onInputModeChange('hands')}
+            >
+              Hands
+            </button>
+          </div>
+          <div className="launch-actions">
+            <button className="play-button" type="button" onClick={onPlay}>
+              <span className="play-icon" aria-hidden="true" />
+              Play
+            </button>
+            <button className="faq-button" type="button" onClick={onOpenIntro}>
+              FAQ
+            </button>
+          </div>
         </div>
       ) : isLost ? (
         <div className="loss-panel">
@@ -102,7 +137,7 @@ export function Hud({
           <p className="intro-kicker">Storm briefing</p>
           <h2 id="game-intro-title">Save the shelter from the storm</h2>
           <div className="intro-copy">
-            <p>Move your mouse near falling junk to push it away from the shelter.</p>
+            <p>Move your mouse, or your hand in Hands mode, near falling junk to push it away.</p>
             <p>Survive as long as you can. The storm gets stronger over time.</p>
             <div className="intro-powers" aria-label="Superpowers">
               <p>Superpowers</p>
@@ -140,6 +175,25 @@ export function Hud({
                 Got It
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {needsHandSetup && (
+        <div className="hand-setup" role="dialog" aria-modal="true" aria-labelledby="hand-setup-title">
+          <p className="intro-kicker">Hands mode</p>
+          <h2 id="hand-setup-title">Allow camera access</h2>
+          <p>
+            Hands mode needs your browser camera permission. Approve the camera prompt, then start the game.
+          </p>
+          {handCameraError && <p className="hand-setup-error">Camera permission was blocked or unavailable.</p>}
+          <div className="hand-setup-actions">
+            <button type="button" onClick={onCancelHandSetup}>
+              Cancel
+            </button>
+            <button type="button" onClick={onStartHandsGame} disabled={!isHandCameraReady}>
+              {isHandCameraReady ? 'Start' : 'Waiting'}
+            </button>
           </div>
         </div>
       )}
