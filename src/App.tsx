@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import { HandTracker } from './components/HandTracker';
 import { Hud } from './components/Hud';
-import type { HandPoint, InputMode } from './types/input';
 import type { GamePhase, GameStats } from './types/game';
+import type { HandPoint, InputMode } from './types/input';
 import './App.css';
 
 const initialStats: GameStats = {

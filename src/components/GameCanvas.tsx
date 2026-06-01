@@ -3,6 +3,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react'
 import { MathUtils } from 'three'
 import { RainOnGlass } from '../effects/RainOnGlass'
 import { HazardAssetsPreload, Hazards } from '../scenes/Hazards'
+import { SharedGltfLoaderProvider } from '../loaders/useSharedGltfLoader'
 import { ShelterScene } from '../scenes/ShelterScene'
 import type { GamePhase, GameStats } from '../types/game'
 import { HAND_INPUT_SCALE, type HandPoint, type InputMode } from '../types/input'
@@ -66,7 +67,7 @@ function WavedashBoot({ ready }: { ready: boolean }) {
   return null
 }
 
-function HandSkeleton({ active, handPoints }: { active: boolean; handPoints: HandPoint[] }) {
+function HandMarker({ active, handPoints }: { active: boolean; handPoints: HandPoint[] }) {
   const { viewport } = useThree()
   if (!active || handPoints.length === 0) return null
 
@@ -113,25 +114,27 @@ export function GameCanvas({ phase, runId, blastId, inputMode, handPoints, onLos
 
   return (
     <Canvas camera={{ position: [0, 1.25, 5], fov: 42 }}>
-      <WavedashBoot ready={assetsReady} />
-      <CameraRig phase={phase} />
-      <Suspense fallback={null}>
-        <HazardAssetsPreload />
-      </Suspense>
-      <ShelterScene phase={phase} onReady={handleSceneReady} />
-      <HandSkeleton active={phase === 'playing' && inputMode === 'hands'} handPoints={handPoints} />
-      {hasStarted && (
-        <Hazards
-          key={runId}
-          active={phase === 'playing'}
-          blastId={blastId}
-          inputMode={inputMode}
-          handPoints={handPoints}
-          onLose={onLose}
-          onStatsChange={onStatsChange}
-        />
-      )}
-      <RainOnGlass phase={phase} />
+      <SharedGltfLoaderProvider>
+        <WavedashBoot ready={assetsReady} />
+        <CameraRig phase={phase} />
+        <Suspense fallback={null}>
+          <HazardAssetsPreload />
+        </Suspense>
+        <ShelterScene phase={phase} onReady={handleSceneReady} />
+        <HandMarker active={phase === 'playing' && inputMode === 'hands'} handPoints={handPoints} />
+        {hasStarted && (
+          <Hazards
+            key={runId}
+            active={phase === 'playing'}
+            blastId={blastId}
+            inputMode={inputMode}
+            handPoints={handPoints}
+            onLose={onLose}
+            onStatsChange={onStatsChange}
+          />
+        )}
+        <RainOnGlass phase={phase} />
+      </SharedGltfLoaderProvider>
     </Canvas>
   )
 }

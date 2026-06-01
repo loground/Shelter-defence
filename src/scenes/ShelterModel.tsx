@@ -1,53 +1,31 @@
 import { useGLTF } from '@react-three/drei';
-import { useFrame, useThree } from '@react-three/fiber';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useEffect, useRef } from 'react';
 import type { Group, Object3D } from 'three';
 import { MathUtils, MeshStandardMaterial } from 'three';
-import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import {
   clearShelterCollisionTriangles,
   setShelterCollisionTriangles,
   trianglesFromObject,
 } from '../collision/shelterCollision';
 import { GAME_SHELTER } from '../config/shelter';
+import { useSharedGltfLoader } from '../loaders/useSharedGltfLoader';
 import type { GamePhase } from '../types/game';
 import { Campfire } from './Campfire';
 
 const SHELTER_MODEL_URL = '/3d/shelter.glb';
 const DRACO_DECODER_PATH = '/draco/';
-const BASIS_TRANSCODER_PATH = '/basis/';
 
 type ShelterModelProps = {
   phase: GamePhase;
   onReady: () => void;
 };
 
-type ExtendGltfLoader = NonNullable<Parameters<typeof useGLTF>[3]>;
-type Ktx2CapableLoader = { setKTX2Loader: (loader: unknown) => void };
-
 export function ShelterModel({ phase, onReady }: ShelterModelProps) {
-  const { gl } = useThree();
   const group = useRef<Group>(null);
   const hasStarted = phase !== 'launch';
-  const ktx2Loader = useMemo(() => {
-    const loader = new KTX2Loader();
-    loader.setTranscoderPath(BASIS_TRANSCODER_PATH);
-    loader.detectSupport(gl);
-    return loader;
-  }, [gl]);
-  const extendLoader = useCallback(
-    ((loader: Ktx2CapableLoader) => {
-      loader.setKTX2Loader(ktx2Loader);
-    }) as ExtendGltfLoader,
-    [ktx2Loader],
-  );
+  const extendLoader = useSharedGltfLoader();
   const { scene } = useGLTF(SHELTER_MODEL_URL, DRACO_DECODER_PATH, false, extendLoader);
-
-  useEffect(() => {
-    return () => {
-      ktx2Loader.dispose();
-    };
-  }, [ktx2Loader]);
 
   useEffect(() => {
     onReady();

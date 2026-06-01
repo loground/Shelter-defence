@@ -1,9 +1,8 @@
 import { useGLTF } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Material, Mesh, Object3D } from 'three'
 import { AdditiveBlending, Box3, Group, MathUtils, Vector3 } from 'three'
-import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import type { CollisionTriangle } from '../collision/shelterCollision'
 import {
   getShelterCollisionTriangles,
@@ -12,6 +11,8 @@ import {
   trianglesTouchShelterMesh,
 } from '../collision/shelterCollision'
 import { GAME_SHELTER } from '../config/shelter'
+import { useSharedGltfLoader } from '../loaders/useSharedGltfLoader'
+import type { ExtendGltfLoader } from '../loaders/useSharedGltfLoader'
 import type { GameStats } from '../types/game'
 import { HAND_INPUT_SCALE, type HandPoint, type InputMode } from '../types/input'
 
@@ -79,7 +80,6 @@ const COLLISION_ROOF = {
 }
 const COLLISION_POST_HEIGHT = 1.92
 const DRACO_DECODER_PATH = '/draco/'
-const BASIS_TRANSCODER_PATH = '/basis/'
 const HAZARD_MODELS: Record<HazardKind, string> = {
   bottle: '/3d/bottle1.glb',
   can: '/3d/can1.glb',
@@ -96,8 +96,6 @@ const modelBox = new Box3()
 const modelCenter = new Vector3()
 const modelSize = new Vector3()
 
-type ExtendGltfLoader = NonNullable<Parameters<typeof useGLTF>[3]>
-type Ktx2CapableLoader = { setKTX2Loader: (loader: unknown) => void }
 type MaterialObject = Object3D & {
   material: Material | Material[]
 }
@@ -344,30 +342,6 @@ function normalizeHazardTemplate(scene: Object3D) {
   return normalized
 }
 
-function useHazardLoader() {
-  const { gl } = useThree()
-  const ktx2Loader = useMemo(() => {
-    const loader = new KTX2Loader()
-    loader.setTranscoderPath(BASIS_TRANSCODER_PATH)
-    loader.detectSupport(gl)
-    return loader
-  }, [gl])
-  const extendLoader = useCallback(
-    ((loader: Ktx2CapableLoader) => {
-      loader.setKTX2Loader(ktx2Loader)
-    }) as ExtendGltfLoader,
-    [ktx2Loader],
-  )
-
-  useEffect(() => {
-    return () => {
-      ktx2Loader.dispose()
-    }
-  }, [ktx2Loader])
-
-  return extendLoader
-}
-
 function useHazardTemplates(extendLoader: ExtendGltfLoader) {
   const bottle = useGLTF(HAZARD_MODELS.bottle, DRACO_DECODER_PATH, false, extendLoader)
   const can = useGLTF(HAZARD_MODELS.can, DRACO_DECODER_PATH, false, extendLoader)
@@ -391,7 +365,7 @@ function useUmbrellaTemplate(extendLoader: ExtendGltfLoader) {
 }
 
 export function HazardAssetsPreload() {
-  const extendLoader = useHazardLoader()
+  const extendLoader = useSharedGltfLoader()
   useHazardTemplates(extendLoader)
   useUmbrellaTemplate(extendLoader)
   return null
@@ -680,7 +654,7 @@ export function Hazards({ active, blastId, inputMode, handPoints, onLose, onStat
   const shieldUntil = useRef(0)
   const shieldActiveRef = useRef(false)
   const flarePower = useRef(0)
-  const extendLoader = useHazardLoader()
+  const extendLoader = useSharedGltfLoader()
   const hazardTemplates = useHazardTemplates(extendLoader)
   const umbrellaTemplate = useUmbrellaTemplate(extendLoader)
 
@@ -783,7 +757,7 @@ export function Hazards({ active, blastId, inputMode, handPoints, onLose, onStat
       spawnTimer.current = spawnInterval
     }
 
-    const mousePoint = {
+    const mouse = {
       x: pointer.x * viewport.width * 0.5,
       y: pointer.y * viewport.height * 0.5,
     }
@@ -793,7 +767,7 @@ export function Hazards({ active, blastId, inputMode, handPoints, onLose, onStat
             x: (point.x - 0.5) * viewport.width * HAND_INPUT_SCALE,
             y: (0.5 - point.y) * viewport.height * HAND_INPUT_SCALE,
           }))
-        : [mousePoint]
+        : [mouse]
 
     if (shieldActiveRef.current && elapsed.current >= shieldUntil.current) {
       shieldActiveRef.current = false
